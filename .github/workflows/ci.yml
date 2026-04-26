@@ -177,7 +177,13 @@ jobs:
 
       - name: Run Playwright smoke
         working-directory: frontend
-        run: pnpm playwright test
+        # ``--project=smoke`` runs only the four golden-path specs
+        # defined in playwright.config.ts. The rest live under
+        # ``--project=extended`` and are intentionally not gated on
+        # PRs — backend pytest already covers the same flows. Run
+        # them locally with ``make smoke-extended`` before risky
+        # frontend changes.
+        run: pnpm playwright test --project=smoke
 
       - name: Dump stack logs on failure
         if: failure()
