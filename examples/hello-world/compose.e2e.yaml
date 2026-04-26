@@ -12,16 +12,26 @@
 
 services:
   api:
+    # !reset clears the inherited ``build:`` from docker-compose.yml so
+    # ``up --build`` doesn't rebuild atrium-backend and re-tag it as
+    # atrium-hello-backend (clobbering the prebuilt host image). The
+    # !override on volumes/command drops the dev compose's bind-mount
+    # + --reload command so the runtime image's baked-in source is
+    # used unchanged.
+    build: !reset null
     image: atrium-hello-backend:latest
-    # Override the dev bind mount the dev compose set up — the host
-    # package is baked into the image, no source mount needed.
-    volumes: []
+    pull_policy: never
+    volumes: !override []
+    command: !override
+      ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
     environment:
       ATRIUM_HOST_MODULE: atrium_hello_world.bootstrap
 
   worker:
+    build: !reset null
     image: atrium-hello-backend:latest
-    volumes: []
+    pull_policy: never
+    volumes: !override []
     environment:
       ATRIUM_HOST_MODULE: atrium_hello_world.bootstrap
       HELLO_TICK_SECONDS: "2"
