@@ -78,7 +78,7 @@ test.describe('hello-world example', () => {
     await loginAsSuperAdmin(page);
     await page.goto('/');
     const card = page.getByTestId('hello-card');
-    await expect(card).toBeVisible({ timeout: 15_000 });
+    await expect(card).toBeVisible();
     await expect(card.getByTestId('hello-message')).toHaveText('Hello World!');
     await expect(card.getByTestId('hello-counter')).toBeVisible();
     await expect(card.getByTestId('hello-toggle')).toBeVisible();
@@ -114,7 +114,7 @@ test.describe('hello-world example', () => {
     // for stability against label translation.
     await expect(
       page.getByRole('tab', { name: 'Hello World' }),
-    ).toBeVisible({ timeout: 15_000 });
+    ).toBeVisible();
 
     // Switch into a non-admin and assert the tab is hidden. atrium's
     // /admin route gates by role rather than perm, so a plain ``user``
@@ -129,10 +129,9 @@ test.describe('hello-world example', () => {
   });
 
   test('toggle on starts the tick, toggle off stops it', async ({ page }) => {
-    // Inline APScheduler tick at HELLO_TICK_SECONDS=2 in the smoke
-    // overlays. One tick + a small margin is enough; no worker-poll
-    // delay since the example bypasses scheduled_jobs.
-    test.setTimeout(60_000);
+    // Settle waits + tick poll add up to ~16 s on a green run. Bumped
+    // above the global 30 s ceiling for headroom on cold-cache CI.
+    test.setTimeout(45_000);
     await loginAsSuperAdmin(page);
 
     // Start clean: ensure disabled and capture the baseline counter.
