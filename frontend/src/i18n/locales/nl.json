@@ -213,6 +213,9 @@
     "subject": "Onderwerp",
     "body": "Inhoud",
     "description": "Omschrijving",
+    "locale": "Taal",
+    "locales": "Talen",
+    "localeMissing": "Nog geen vertaling voor deze taal. Sla op om deze aan te maken.",
     "saved": "Sjabloon opgeslagen",
     "jinjaHint": "Jinja-expressies worden bij het verzenden vervangen. Raadpleeg de documentatie van je host-app voor de beschikbare variabelen."
   },

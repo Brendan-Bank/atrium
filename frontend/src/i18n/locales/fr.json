@@ -213,6 +213,9 @@
     "subject": "Objet",
     "body": "Contenu",
     "description": "Description",
+    "locale": "Langue",
+    "locales": "Langues",
+    "localeMissing": "Aucune traduction pour cette langue pour l'instant. Enregistrer pour la créer.",
     "saved": "Modèle enregistré",
     "jinjaHint": "Les expressions Jinja sont évaluées au moment de l'envoi. Reportez-vous à la documentation de votre application hôte pour les variables disponibles."
   },

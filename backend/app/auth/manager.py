@@ -137,6 +137,7 @@ class UserManager(IntegerIDMixin, BaseUserManager[User, int]):
                             "full_name": user.full_name or "",
                         },
                     },
+                    locale=user.preferred_language or "en",
                 )
                 await s.commit()
         except Exception as exc:

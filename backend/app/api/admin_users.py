@@ -267,6 +267,7 @@ async def admin_trigger_password_reset(
                     "full_name": target.full_name or "",
                 },
             },
+            locale=target.preferred_language or "en",
         )
     except Exception as exc:
         log.warning(

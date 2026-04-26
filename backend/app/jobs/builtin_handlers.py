@@ -123,7 +123,7 @@ async def email_send_handler(
 
     try:
         subject, text, html = await render_template(
-            session, outbox.template, outbox.context
+            session, outbox.template, outbox.context, outbox.locale or "en"
         )
         backend = get_mail_backend()
         await backend.send(

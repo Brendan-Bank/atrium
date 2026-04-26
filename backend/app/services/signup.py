@@ -196,6 +196,10 @@ async def register_user(
                 "verify_url": verify_url,
                 "brand_name": brand_name,
             },
+            # Recipient picked their language at signup time — render
+            # the verify-email template against that variant (or EN
+            # fallback when the host hasn't translated it).
+            locale=lang_value,
         )
 
     log.info(

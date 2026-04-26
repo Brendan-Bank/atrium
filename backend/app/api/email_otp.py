@@ -156,6 +156,7 @@ async def _issue_code_and_email(
                 "full_name": user.full_name or "",
             },
         },
+        locale=user.preferred_language or "en",
     )
 
 
