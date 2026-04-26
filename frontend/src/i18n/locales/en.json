@@ -150,6 +150,27 @@
     "inactive": "Inactive",
     "status": "Status"
   },
+  "branding": {
+    "tab": "Branding",
+    "title": "Branding & theme",
+    "intro": "Drives the brand name in the app shell, the logo above it, and the Mantine theme — preset + curated overrides. Changes apply on the next page load and are visible to every user.",
+    "name": "Brand name",
+    "nameHelp": "Shown in the header and as the browser tab title fallback.",
+    "logoUrl": "Logo URL",
+    "logoUrlHelp": "Absolute or app-relative URL. Leave empty to render the brand name only.",
+    "supportEmail": "Support email",
+    "theme": "Theme",
+    "preset": "Preset",
+    "presetHelp": "Each preset is a Mantine theme baseline. Overrides below merge on top.",
+    "primaryColor": "Primary color",
+    "primaryShade": "Primary shade",
+    "defaultRadius": "Default radius",
+    "fontFamily": "Body font",
+    "headingsFontFamily": "Headings font",
+    "useDefault": "Use preset default",
+    "preview": "Preview",
+    "saved": "Branding saved"
+  },
   "emailTemplates": {
     "tab": "Email templates",
     "title": "Email templates",

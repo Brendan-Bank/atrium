@@ -41,10 +41,15 @@ export function useAdminAppConfig() {
   });
 }
 
-export function useUpdateAppConfigNamespace(namespace: string) {
+// Mutation accepts any serialisable object; the server runs the
+// payload through the namespace's Pydantic model and returns 400 on
+// shape mismatch, so we don't try to mirror that shape on the client.
+export function useUpdateAppConfigNamespace<T = Record<string, unknown>>(
+  namespace: string,
+) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: Record<string, unknown>) =>
+    mutationFn: async (payload: T) =>
       (
         await api.put<Record<string, unknown>>(
           `/admin/app-config/${namespace}`,

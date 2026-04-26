@@ -4,6 +4,7 @@ import {
   Burger,
   Button,
   Group,
+  Image,
   Menu,
   NavLink,
   Select,
@@ -20,6 +21,7 @@ import {
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
+import { useAppConfig } from '@/hooks/useAppConfig';
 import { useMe, useLogout } from '@/hooks/useAuth';
 
 import { ImpersonationBanner } from './ImpersonationBanner';
@@ -29,6 +31,8 @@ export function AppLayout() {
   const [opened, { toggle, close }] = useDisclosure();
   const { t, i18n } = useTranslation();
   const { data: me } = useMe();
+  const { data: appConfig } = useAppConfig();
+  const brand = appConfig?.brand;
   const logout = useLogout();
   const navigate = useNavigate();
   const location = useLocation();
@@ -60,9 +64,18 @@ export function AppLayout() {
     >
       <AppShell.Header>
         <Group h="100%" px="md" justify="space-between">
-          <Group>
+          <Group gap="sm">
             <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" />
-            <Title order={4}>{t('app.title')}</Title>
+            {brand?.logo_url && (
+              <Image
+                src={brand.logo_url}
+                h={32}
+                w="auto"
+                fit="contain"
+                alt=""
+              />
+            )}
+            <Title order={4}>{brand?.name ?? t('app.title')}</Title>
           </Group>
           <Group gap="xs">
             {me && <NotificationsBell />}
