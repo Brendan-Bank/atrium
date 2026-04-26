@@ -24,6 +24,7 @@ from app.api.me_context import router as me_context_router
 from app.api.notifications import router as notifications_router
 from app.api.reminder_rules import router as reminder_rules_router
 from app.api.sessions import router as sessions_router
+from app.api.signup import router as signup_router
 from app.api.totp import admin_router as totp_admin_router
 from app.api.totp import router as totp_router
 from app.api.webauthn import router as webauthn_router
@@ -143,6 +144,7 @@ def create_app() -> FastAPI:
     app.include_router(webauthn_router)
     app.include_router(account_deletion_self_router)
     app.include_router(account_deletion_admin_router)
+    app.include_router(signup_router)
 
     return app
 

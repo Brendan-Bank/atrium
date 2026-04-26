@@ -31,6 +31,11 @@ AUTH_LIMITS: dict[tuple[str, str], tuple[int, int]] = {
     ("POST", "/auth/forgot-password"): (3, 60),
     ("POST", "/auth/reset-password"): (10, 60),
     ("POST", "/invites/accept"): (10, 60),
+    # Self-serve signup. Tighter than reset because every successful
+    # call creates a User row + sends an email; 3/min is enough for a
+    # legitimate retry after a typo.
+    ("POST", "/auth/register"): (3, 60),
+    ("POST", "/auth/verify-email"): (10, 60),
 }
 
 

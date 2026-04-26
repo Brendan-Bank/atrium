@@ -12,8 +12,10 @@ import { HomePage } from './routes/HomePage';
 import { LoginPage } from './routes/LoginPage';
 import { NotificationsPage } from './routes/NotificationsPage';
 import { ProfilePage } from './routes/ProfilePage';
+import { RegisterPage } from './routes/RegisterPage';
 import { ResetPasswordPage } from './routes/ResetPasswordPage';
 import { TwoFactorPage } from './routes/TwoFactorPage';
+import { VerifyEmailPage } from './routes/VerifyEmailPage';
 
 export default function App() {
   const { data: appConfig } = useAppConfig();
@@ -41,6 +43,8 @@ export default function App() {
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/accept-invite" element={<AcceptInvitePage />} />
+      <Route path="/register" element={<RegisterPage />} />
+      <Route path="/verify-email" element={<VerifyEmailPage />} />
       {/* 2FA gate — needs a partial session, so it lives outside
           RequireAuth (which only understands full sessions). */}
       <Route path="/2fa" element={<TwoFactorPage />} />

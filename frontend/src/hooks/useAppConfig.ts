@@ -26,10 +26,18 @@ export interface I18nConfig {
   overrides: Record<string, Record<string, string>>;
 }
 
+export interface PublicAuthConfig {
+  // Carve-out from AuthConfig — the full auth namespace stays
+  // admin-only (password policy etc.), but the LoginPage needs to
+  // know whether to render the "Sign up" link.
+  allow_signup: boolean;
+}
+
 export interface PublicAppConfig {
   brand: BrandConfig;
   system?: SystemConfig;
   i18n?: I18nConfig;
+  auth?: PublicAuthConfig;
 }
 
 export type AdminAppConfig = Record<string, Record<string, unknown>>;

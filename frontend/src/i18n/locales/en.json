@@ -28,10 +28,28 @@
     "password": "Password",
     "submit": "Log in",
     "forgotPassword": "Forgot your password?",
+    "signupCta": "Don't have an account? Sign up",
     "invalidEmail": "Enter a valid email address",
     "passwordRequired": "Password is required",
     "invalidCredentials": "Invalid email or password",
     "unknownError": "Something went wrong. Please try again."
+  },
+  "register": {
+    "title": "Create your account",
+    "intro": "Sign up with an email and password. We'll send you a link to verify your address.",
+    "fullName": "Full name (optional)",
+    "submit": "Create account",
+    "checkEmailTitle": "Check your email",
+    "checkEmailBody": "We've sent a verification link to {{email}}. Click it to finish creating your account.",
+    "signupClosed": "Signup is closed. If you've been invited, use your invite link.",
+    "emailTaken": "An account with that email already exists.",
+    "unknownError": "Could not create the account. Please try again."
+  },
+  "verifyEmail": {
+    "title": "Verify your email",
+    "success": "Your email is verified. You can now sign in.",
+    "invalid": "This verification link is invalid or has expired.",
+    "missing": "Missing verification token."
   },
   "acceptInvite": {
     "title": "Create your account",

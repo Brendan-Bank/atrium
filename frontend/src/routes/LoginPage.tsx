@@ -18,6 +18,7 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import { login } from '@/lib/auth';
 import { api } from '@/lib/api';
+import { useAppConfig } from '@/hooks/useAppConfig';
 import { ME_QUERY_KEY } from '@/hooks/useAuth';
 import type { TOTPState } from '@/hooks/useTOTP';
 
@@ -26,6 +27,8 @@ export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const qc = useQueryClient();
+  const { data: appConfig } = useAppConfig();
+  const allowSignup = appConfig?.auth?.allow_signup === true;
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -107,6 +110,11 @@ export function LoginPage() {
               <Anchor component={Link} to="/forgot-password" size="sm" ta="center">
                 {t('login.forgotPassword')}
               </Anchor>
+              {allowSignup && (
+                <Anchor component={Link} to="/register" size="sm" ta="center">
+                  {t('login.signupCta')}
+                </Anchor>
+              )}
             </Stack>
           </form>
         </Paper>
