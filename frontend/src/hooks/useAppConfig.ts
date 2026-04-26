@@ -19,6 +19,11 @@ export interface SystemConfig {
   maintenance_message: string;
   announcement: string | null;
   announcement_level: AnnouncementLevel;
+  // URL of a host-supplied JS bundle dynamically imported on SPA boot.
+  // The bundle's import-time side-effects populate the host registries
+  // (home widgets, routes, nav items, admin tabs). Null when no host
+  // extension is loaded.
+  host_bundle_url?: string | null;
 }
 
 export interface I18nConfig {

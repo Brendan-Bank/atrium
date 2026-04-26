@@ -12,6 +12,8 @@ LOCKED to claim exactly one row at a time.
 from __future__ import annotations
 
 import asyncio
+import importlib
+import os
 import signal
 from datetime import UTC, datetime
 
@@ -215,6 +217,16 @@ async def main() -> None:
         coalesce=True,
         max_instances=1,
     )
+
+    host_module = os.environ.get("ATRIUM_HOST_MODULE")
+    if host_module:
+        mod = importlib.import_module(host_module)
+        init = getattr(mod, "init_worker", None)
+        if callable(init):
+            init(scheduler)
+        else:
+            log.info("host.init_worker.absent", module=host_module)
+
     scheduler.start()
 
     # Kick once immediately so /health doesn't see a "worker: no heartbeat"
