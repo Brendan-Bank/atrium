@@ -140,7 +140,16 @@
     "webauthnNeverUsed": "never used",
     "webauthnAdd": "Register",
     "webauthnConfirmDelete": "Remove \"{{label}}\"?",
-    "webauthnDeleted": "Security key removed."
+    "webauthnDeleted": "Security key removed.",
+    "deleteAccountTitle": "Delete account",
+    "deleteAccountIntro": "Permanently removes your account. After confirmation, your sign-in is disabled immediately and your data is purged after a grace period.",
+    "deleteAccountButton": "Delete my account",
+    "deleteAccountModalTitle": "Delete your account?",
+    "deleteAccountModalIntro": "This is irreversible after the grace period. Re-enter your password to continue.",
+    "deleteAccountConfirm": "Delete account",
+    "deleteAccountCancel": "Cancel",
+    "deleteAccountWrongPassword": "Wrong password.",
+    "deleteAccountFailed": "Could not delete the account."
   },
   "admin": {
     "saved": "Saved",
@@ -149,6 +158,25 @@
     "active": "Active",
     "inactive": "Inactive",
     "status": "Status"
+  },
+  "maintenance": {
+    "title": "{{brand}} is offline for maintenance",
+    "defaultMessage": "Atrium is undergoing maintenance. Please check back in a few minutes."
+  },
+  "system": {
+    "tab": "System",
+    "title": "Maintenance & announcements",
+    "intro": "Maintenance mode shows a friendly page to non-super_admin users; announcement renders as a banner at the top of the app shell.",
+    "maintenanceMode": "Maintenance mode",
+    "maintenanceModeHelp": "Block all routes for non-super_admin users until disabled.",
+    "maintenanceMessage": "Maintenance message",
+    "maintenanceWarningTitle": "Heads up",
+    "maintenanceWarning": "Only super_admins keep access while this is on. Make sure at least one super_admin can sign in before saving.",
+    "announcement": "Announcement",
+    "announcementHelp": "Plain text shown above the app shell to every signed-in user. Leave empty to hide.",
+    "announcementPlaceholder": "Scheduled maintenance Saturday 22:00–23:00 UTC.",
+    "announcementLevel": "Severity",
+    "saved": "System settings saved"
   },
   "branding": {
     "tab": "Branding",
@@ -283,5 +311,21 @@
     "new": "new",
     "view": "View",
     "payloadHint": "Raw payload for this notification. Host apps register per-kind rendering; until then this is the fallback view."
+  },
+  "translations": {
+    "tab": "Translations",
+    "title": "Translations",
+    "intro": "Pick which locales the language switcher exposes, and override individual UI strings without a redeploy. Overrides take effect on the next page load.",
+    "enabledLocales": "Enabled locales",
+    "enabledLocalesHelp": "Users can switch between these from the header. The first one is the fallback.",
+    "locale": "Locale",
+    "key": "Key",
+    "default": "Default",
+    "override": "Override",
+    "searchPlaceholder": "Search keys…",
+    "clearOverride": "Clear",
+    "noKeys": "No keys match your search.",
+    "saved": "Translations saved",
+    "reloadHint": "Reload the page to see the new strings."
   }
 }

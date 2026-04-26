@@ -5,6 +5,7 @@ import {
   Button,
   Group,
   Loader,
+  Modal,
   Paper,
   PasswordInput,
   Select,
@@ -21,6 +22,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 
 import { TwoFactorSetupModal } from '@/components/TwoFactorSetupModal';
+import { useSelfDelete } from '@/hooks/useAccountDeletion';
 import { ME_QUERY_KEY, useMe } from '@/hooks/useAuth';
 import { useLogoutAll, useSessions } from '@/hooks/useSessions';
 import {
@@ -54,6 +56,10 @@ export function ProfilePage() {
   );
   const [webauthnLabel, setWebauthnLabel] = useState('');
   const [webauthnError, setWebauthnError] = useState<string | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const selfDelete = useSelfDelete();
 
   const profileForm = useForm({
     initialValues: {
@@ -471,6 +477,74 @@ export function ProfilePage() {
           </Button>
         </Group>
       </Paper>
+
+      <Paper withBorder p="sm" radius="md">
+        <Title order={5} mb={4}>
+          {t('profile.deleteAccountTitle')}
+        </Title>
+        <Text size="sm" c="dimmed" mb="sm">
+          {t('profile.deleteAccountIntro')}
+        </Text>
+        <Group justify="flex-end">
+          <Button
+            color="red"
+            variant="light"
+            onClick={() => {
+              setDeleteError(null);
+              setDeletePassword('');
+              setDeleteOpen(true);
+            }}
+          >
+            {t('profile.deleteAccountButton')}
+          </Button>
+        </Group>
+      </Paper>
+
+      <Modal
+        opened={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        title={t('profile.deleteAccountModalTitle')}
+        centered
+      >
+        <Stack gap="sm">
+          <Text size="sm">{t('profile.deleteAccountModalIntro')}</Text>
+          <PasswordInput
+            label={t('login.password')}
+            value={deletePassword}
+            onChange={(e) => setDeletePassword(e.currentTarget.value)}
+            autoComplete="current-password"
+          />
+          {deleteError ? <Alert color="red">{deleteError}</Alert> : null}
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setDeleteOpen(false)}>
+              {t('profile.deleteAccountCancel')}
+            </Button>
+            <Button
+              color="red"
+              loading={selfDelete.isPending}
+              disabled={deletePassword.length === 0}
+              onClick={async () => {
+                setDeleteError(null);
+                try {
+                  await selfDelete.mutateAsync({ password: deletePassword });
+                  setDeleteOpen(false);
+                  navigate('/login?deleted=1', { replace: true });
+                } catch (err) {
+                  const status = (err as { response?: { status?: number } })
+                    .response?.status;
+                  setDeleteError(
+                    status === 401
+                      ? t('profile.deleteAccountWrongPassword')
+                      : t('profile.deleteAccountFailed'),
+                  );
+                }
+              }}
+            >
+              {t('profile.deleteAccountConfirm')}
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </Stack>
   );
 }

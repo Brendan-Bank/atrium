@@ -4,6 +4,8 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from app.api.account_deletion import admin_router as account_deletion_admin_router
+from app.api.account_deletion import self_router as account_deletion_self_router
 from app.api.admin_roles import router as admin_roles_router
 from app.api.admin_users import router as admin_users_router
 from app.api.app_config import admin_router as app_config_admin_router
@@ -30,6 +32,7 @@ from app.auth.schemas import UserRead, UserUpdate
 from app.auth.users import fastapi_users
 from app.logging import configure_logging, log
 from app.services.audit import set_impersonator
+from app.services.maintenance import MaintenanceMiddleware
 from app.services.rate_limit import AuthRateLimitMiddleware
 from app.settings import get_settings
 
@@ -91,6 +94,10 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(ImpersonationAuditMiddleware)
     app.add_middleware(AuthRateLimitMiddleware)
+    # Outermost so it short-circuits before the rate-limiter or audit
+    # middleware bother to spin up; otherwise a 503 still costs us a
+    # rate-limit bucket increment.
+    app.add_middleware(MaintenanceMiddleware)
 
     app.include_router(health_router)
 
@@ -134,6 +141,8 @@ def create_app() -> FastAPI:
     app.include_router(totp_admin_router)
     app.include_router(email_otp_router)
     app.include_router(webauthn_router)
+    app.include_router(account_deletion_self_router)
+    app.include_router(account_deletion_admin_router)
 
     return app
 

@@ -24,6 +24,7 @@ from app.email.backend import EmailMessage, get_mail_backend
 from app.email.sender import render_template
 from app.jobs.runner import register_handler
 from app.logging import log
+from app.models.auth import User
 from app.models.email_outbox import EmailOutbox
 from app.models.enums import EmailStatus
 from app.models.ops import AppSetting, EmailLog, ScheduledJob
@@ -177,6 +178,44 @@ async def email_send_handler(
     )
 
 
+# ----- account hard-delete -----
+
+
+async def account_hard_delete_handler(
+    session: AsyncSession,
+    job: ScheduledJob,
+    payload: dict[str, Any],
+) -> None:
+    """Permanently remove every user whose grace window has elapsed.
+
+    Soft-deleted users are anonymised the moment they request deletion;
+    this handler completes the GDPR pipeline by deleting the row
+    outright once ``scheduled_hard_delete_at`` passes. Cascades fan out
+    via the FK definitions in 0001 (auth_sessions, notifications, etc.
+    are CASCADE; audit_log.actor_user_id is SET NULL so history is
+    preserved with an anonymous actor).
+    """
+    del job, payload  # tick-driven, scans the whole table
+
+    now = _utcnow_naive()
+    targets = list(
+        (
+            await session.execute(
+                select(User).where(
+                    User.scheduled_hard_delete_at.is_not(None),
+                    User.scheduled_hard_delete_at <= now,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for user in targets:
+        await session.delete(user)
+    if targets:
+        log.info("account.hard_deleted", count=len(targets))
+
+
 # ----- registration -----
 
 
@@ -189,3 +228,4 @@ def register_builtin_handlers() -> None:
     """
     register_handler("audit_prune", audit_prune_handler)
     register_handler("email_send", email_send_handler)
+    register_handler("account_hard_delete", account_hard_delete_handler)

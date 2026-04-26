@@ -33,6 +33,7 @@ MAX_JOBS_PER_TICK = 50
 HEARTBEAT_INTERVAL_SECONDS = 30
 HEARTBEAT_KEY = "worker_heartbeat"
 AUDIT_PRUNE_INTERVAL_SECONDS = 24 * 60 * 60
+ACCOUNT_HARD_DELETE_INTERVAL_SECONDS = 24 * 60 * 60
 OUTBOX_DRAIN_INTERVAL_SECONDS = 60
 MAX_OUTBOX_PER_TICK = 50
 
@@ -150,6 +151,26 @@ async def _enqueue_audit_prune() -> None:
             await session.rollback()
 
 
+async def _enqueue_account_hard_delete() -> None:
+    factory = get_session_factory()
+    async with factory() as session:
+        try:
+            session.add(
+                ScheduledJob(
+                    job_type="account_hard_delete",
+                    run_at=datetime.now(UTC).replace(tzinfo=None),
+                    state=JobState.PENDING.value,
+                    payload={},
+                )
+            )
+            await session.commit()
+        except Exception as exc:
+            log.error(
+                "worker.account_hard_delete.enqueue_failed", error=str(exc)
+            )
+            await session.rollback()
+
+
 async def main() -> None:
     configure_logging()
     register_builtin_handlers()
@@ -177,6 +198,13 @@ async def main() -> None:
         _enqueue_audit_prune,
         trigger=IntervalTrigger(seconds=AUDIT_PRUNE_INTERVAL_SECONDS),
         id="audit-prune-enqueue",
+        coalesce=True,
+        max_instances=1,
+    )
+    scheduler.add_job(
+        _enqueue_account_hard_delete,
+        trigger=IntervalTrigger(seconds=ACCOUNT_HARD_DELETE_INTERVAL_SECONDS),
+        id="account-hard-delete-enqueue",
         coalesce=True,
         max_instances=1,
     )

@@ -39,6 +39,20 @@ class User(Base, TimestampMixin):
         String(5), nullable=False, default=Language.EN.value
     )
 
+    # Soft-delete: ``deleted_at`` flips at the moment the user (or an
+    # admin) initiates deletion; PII columns are anonymised in the same
+    # transaction so the row can no longer authenticate or be matched
+    # back to a person. ``scheduled_hard_delete_at`` is when the worker
+    # actually removes the row — kept around through the grace window
+    # so audit_log foreign keys keep resolving while the deletion is
+    # still cancellable.
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=False), nullable=True
+    )
+    scheduled_hard_delete_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=False), nullable=True, index=True
+    )
+
 
 class UserInvite(Base, TimestampMixin):
     """Invitation to create an account. No public signup."""

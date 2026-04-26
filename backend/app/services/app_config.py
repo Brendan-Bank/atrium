@@ -39,6 +39,52 @@ class BrandConfig(BaseModel):
     overrides: dict[str, str] = Field(default_factory=dict)
 
 
+class I18nConfig(BaseModel):
+    """Locale enablement + per-locale string overrides.
+
+    ``enabled_locales`` controls which language switcher entries the
+    header renders; codes correspond to the JSON files shipped under
+    ``frontend/src/i18n/locales``. ``overrides`` lets an admin patch
+    individual i18n keys per locale at runtime — outer key is the
+    locale code, inner key is the dotted i18n key (e.g.
+    ``"login.submit"``), inner value is the replacement string. The
+    frontend merges ``overrides[locale]`` on top of the bundled
+    resources at boot.
+    """
+
+    enabled_locales: list[str] = Field(default_factory=lambda: ["en", "nl"])
+    overrides: dict[str, dict[str, str]] = Field(default_factory=dict)
+
+
+class SystemConfig(BaseModel):
+    """Operational toggles. Public so the frontend can render the
+    maintenance page or announcement banner without an extra round-trip
+    or a polling loop after a flag flip."""
+
+    maintenance_mode: bool = False
+    maintenance_message: str = Field(
+        default=(
+            "Atrium is undergoing maintenance. Please check back in a few "
+            "minutes."
+        ),
+        max_length=500,
+    )
+    # Plain text. HTML / markdown would invite an XSS surface unless we
+    # ran the value through the existing bleach sanitiser, and the
+    # textarea is expected to hold one or two short sentences.
+    announcement: str | None = Field(default=None, max_length=2000)
+    announcement_level: Literal["info", "warning", "critical"] = "info"
+
+
+class AuthConfig(BaseModel):
+    """Auth-policy toggles. Phase 7 ships only the self-deletion knobs;
+    later phases extend this same model (signup, password policy,
+    captcha, 2FA enforcement)."""
+
+    allow_self_delete: bool = True
+    delete_grace_days: int = Field(default=30, ge=0, le=365)
+
+
 class _Namespace(BaseModel):
     key: str
     model: type[BaseModel]
@@ -47,6 +93,8 @@ class _Namespace(BaseModel):
 
 NAMESPACES: dict[str, _Namespace] = {
     "brand": _Namespace(key="brand", model=BrandConfig, public=True),
+    "i18n": _Namespace(key="i18n", model=I18nConfig, public=True),
+    "system": _Namespace(key="system", model=SystemConfig, public=True),
 }
 
 
@@ -109,3 +157,6 @@ async def get_all_admin_config(session: AsyncSession) -> dict[str, dict]:
         model = await get_namespace(session, ns.key)
         out[ns.key] = model.model_dump(mode="json")
     return out
+
+
+register_namespace("auth", AuthConfig, public=False)
