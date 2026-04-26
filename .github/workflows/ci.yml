@@ -305,7 +305,7 @@ jobs:
           docker compose \
             -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.e2e.yml \
             -f examples/hello-world/compose.yaml -f examples/hello-world/compose.dev.yaml -f examples/hello-world/compose.e2e.yaml \
-            exec -T api python -m atrium_hello_world.scripts.seed_host_bundle http://localhost:5174/main.js
+            exec -T api python -m atrium_hello_world.scripts.seed_host_bundle /host/main.js
 
       - name: Cache Playwright browsers
         id: hello-playwright-cache

@@ -36,6 +36,17 @@ services:
       ATRIUM_HOST_MODULE: atrium_hello_world.bootstrap
       HELLO_TICK_SECONDS: "2"
 
-  # The hello-bundle sidecar from compose.yaml works as-is in e2e too —
-  # nginx:alpine serves the prebuilt dist with CORS open. No web-side
-  # mount needed; atrium's web container is unmodified.
+  # E2E overrides the sidecar approach with a same-origin mount. The
+  # CI runner had trouble reaching the sidecar's host-port binding
+  # (no access logs in the failure dump despite host_bundle_url
+  # pointing at it), so route the bundle through atrium's own prod
+  # nginx instead. SPA fetches it from /host/main.js — same origin,
+  # no CORS, no extra port to chase. The dev compose still needs the
+  # sidecar because Vite's dev server rewrites dynamic-import
+  # requests for public/ files with ?import.
+  web:
+    volumes: !override
+      - ./examples/hello-world/frontend/dist:/usr/share/nginx/html/host:ro
+
+  hello-bundle:
+    profiles: ["never"]

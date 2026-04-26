@@ -338,7 +338,16 @@ smoke-dev:
 
 # Reused from the generic smoke setup so the same admin + TOTP secret
 # work across both atrium and the example.
-HELLO_BUNDLE_URL := http://localhost:5174/main.js
+#
+# Bundle URL differs by overlay:
+#   * dev — sidecar nginx on a separate port, cross-origin URL.
+#     Vite's dev server rewrites public/ dynamic-imports with
+#     ?import and tries to transform them, so we can't piggy-back
+#     on atrium's web container in dev.
+#   * e2e — atrium's prod nginx serves /host/main.js directly from a
+#     bind-mounted dist (compose.e2e.yaml), same-origin, no CORS.
+HELLO_BUNDLE_URL_DEV := http://localhost:5174/main.js
+HELLO_BUNDLE_URL_E2E := /host/main.js
 
 # Both dev and e2e atrium stacks bake the SPA with
 # VITE_API_BASE_URL=http://localhost:8000 (no /api proxy on either
@@ -364,7 +373,7 @@ smoke-hello-dev: smoke-hello-build-bundle
 	$(COMPOSE_HELLO_DEV) exec -T api python -m app.scripts.seed_admin \
 		--email "$(SMOKE_EMAIL)" --password "$(SMOKE_PASSWORD)" --full-name 'Smoke Admin' \
 		--super-admin --totp-secret "$(SMOKE_TOTP_SECRET)"
-	$(COMPOSE_HELLO_DEV) exec -T api python -m atrium_hello_world.scripts.seed_host_bundle "$(HELLO_BUNDLE_URL)"
+	$(COMPOSE_HELLO_DEV) exec -T api python -m atrium_hello_world.scripts.seed_host_bundle "$(HELLO_BUNDLE_URL_DEV)"
 	cd examples/hello-world/frontend && pnpm exec playwright install chromium 2>/dev/null \
 		|| pnpm exec playwright install chromium
 	cd examples/hello-world/frontend && \
@@ -382,7 +391,6 @@ smoke-hello: smoke-hello-build-bundle
 	docker build -t atrium-hello-backend:latest \
 		--build-arg ATRIUM_BACKEND_IMAGE=atrium-backend:latest \
 		-f examples/hello-world/backend/Dockerfile .
-	$(COMPOSE_HELLO_E2E) up -d --build hello-bundle
 	$(COMPOSE_HELLO_E2E) up -d --build
 	@for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do \
 		curl -fsS http://localhost:8000/readyz > /dev/null && break; \
@@ -393,7 +401,7 @@ smoke-hello: smoke-hello-build-bundle
 	$(COMPOSE_HELLO_E2E) exec -T api python -m app.scripts.seed_admin \
 		--email "$(SMOKE_EMAIL)" --password "$(SMOKE_PASSWORD)" --full-name 'Smoke Admin' \
 		--super-admin --totp-secret "$(SMOKE_TOTP_SECRET)"
-	$(COMPOSE_HELLO_E2E) exec -T api python -m atrium_hello_world.scripts.seed_host_bundle "$(HELLO_BUNDLE_URL)"
+	$(COMPOSE_HELLO_E2E) exec -T api python -m atrium_hello_world.scripts.seed_host_bundle "$(HELLO_BUNDLE_URL_E2E)"
 	cd examples/hello-world/frontend && \
 		E2E_ADMIN_EMAIL=$(SMOKE_EMAIL) \
 		E2E_ADMIN_PASSWORD=$(SMOKE_PASSWORD) \
