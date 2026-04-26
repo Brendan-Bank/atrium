@@ -24,6 +24,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useAppConfig } from '@/hooks/useAppConfig';
 import { useMe, useLogout } from '@/hooks/useAuth';
+import { getNavItems } from '@/host/registry';
 
 import { AnnouncementBanner } from './AnnouncementBanner';
 import { ImpersonationBanner } from './ImpersonationBanner';
@@ -196,6 +197,24 @@ export function AppLayout() {
             onClick={close}
           />
         )}
+        {getNavItems()
+          .filter((item) =>
+            item.condition ? item.condition({ me: me ?? null }) : true,
+          )
+          .map((item) => (
+            <NavLink
+              key={item.key}
+              component={Link}
+              to={item.to}
+              label={item.label}
+              leftSection={item.icon}
+              active={
+                location.pathname === item.to ||
+                location.pathname.startsWith(`${item.to}/`)
+              }
+              onClick={close}
+            />
+          ))}
       </AppShell.Navbar>
 
       <AppShell.Main>

@@ -3,6 +3,7 @@ import { IconBell, IconSettings, IconUser } from '@tabler/icons-react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
+import { HostHomeWidgets } from '@/components/HostHomeWidgets';
 import { useMe } from '@/hooks/useAuth';
 
 /** Minimal landing page. Host apps replace this with whatever
@@ -15,6 +16,7 @@ export function HomePage() {
   return (
     <Container size={680}>
       <Stack gap="md">
+        <HostHomeWidgets />
         <Title order={2}>
           {me?.full_name
             ? t('home.welcomeNamed', { name: me.full_name })

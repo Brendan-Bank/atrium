@@ -18,6 +18,7 @@ export type { EmailTemplate } from '@/hooks/useEmailTemplates';
 export type {
   BrandConfig,
   PublicAppConfig,
+  SystemConfig,
   ThemePreset,
 } from '@/hooks/useAppConfig';
 export type { AuthSessionRead as AuthSession } from '@/hooks/useSessions';
