@@ -74,6 +74,13 @@ class SystemConfig(BaseModel):
     # textarea is expected to hold one or two short sentences.
     announcement: str | None = Field(default=None, max_length=2000)
     announcement_level: Literal["info", "warning", "critical"] = "info"
+    # URL of a host-supplied JS bundle dynamically imported on SPA
+    # boot. The bundle's import-time side-effects populate the host
+    # registries (home widgets, routes, nav items, admin tabs). The
+    # value is fetched and EXECUTED as JS by every browser, so only
+    # an ``app_setting.manage`` admin can set it — same gate as the
+    # rest of this namespace.
+    host_bundle_url: str | None = Field(default=None, max_length=2000)
 
 
 class AuthConfig(BaseModel):

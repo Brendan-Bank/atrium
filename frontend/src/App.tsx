@@ -5,6 +5,7 @@ import { MaintenancePage } from './components/MaintenancePage';
 import { RequireAuth } from './components/RequireAuth';
 import { useAppConfig } from './hooks/useAppConfig';
 import { useMe } from './hooks/useAuth';
+import { getRoutes } from './host/registry';
 import { AcceptInvitePage } from './routes/AcceptInvitePage';
 import { AdminPage } from './routes/AdminPage';
 import { ForgotPasswordPage } from './routes/ForgotPasswordPage';
@@ -36,6 +37,20 @@ export default function App() {
       </Routes>
     );
   }
+  // Host bundles register additional routes via getRoutes(); split
+  // by ``layout``+``requireAuth`` so shell-routes nest inside the
+  // existing AppLayout/RequireAuth wrapper (whose <Outlet/> renders
+  // the matched child) and bare routes mount outside it.
+  const hostRoutes = getRoutes();
+  const shellAuthRoutes = hostRoutes.filter(
+    (r) => (r.layout ?? 'shell') === 'shell' && (r.requireAuth ?? true),
+  );
+  const bareAuthRoutes = hostRoutes.filter(
+    (r) => (r.layout ?? 'shell') === 'bare' && (r.requireAuth ?? true),
+  );
+  const publicHostRoutes = hostRoutes.filter(
+    (r) => (r.requireAuth ?? true) === false,
+  );
   return (
     <Routes>
       {/* Public auth routes (no layout) */}
@@ -49,6 +64,18 @@ export default function App() {
           RequireAuth (which only understands full sessions). */}
       <Route path="/2fa" element={<TwoFactorPage />} />
 
+      {publicHostRoutes.map((r) => (
+        <Route key={r.key} path={r.path} element={r.element} />
+      ))}
+
+      {bareAuthRoutes.map((r) => (
+        <Route
+          key={r.key}
+          path={r.path}
+          element={<RequireAuth>{r.element}</RequireAuth>}
+        />
+      ))}
+
       {/* Authenticated routes (inside app shell) */}
       <Route
         element={
@@ -61,6 +88,9 @@ export default function App() {
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
+        {shellAuthRoutes.map((r) => (
+          <Route key={r.key} path={r.path} element={r.element} />
+        ))}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

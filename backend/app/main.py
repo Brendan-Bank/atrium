@@ -1,3 +1,5 @@
+import importlib
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -151,6 +153,20 @@ def create_app() -> FastAPI:
     app.include_router(account_deletion_self_router)
     app.include_router(account_deletion_admin_router)
     app.include_router(signup_router)
+
+    host_module = os.environ.get("ATRIUM_HOST_MODULE")
+    if host_module:
+        # ImportError is intentionally loud — the operator opted in by
+        # setting the env var, so a typo or missing dep should fail
+        # startup rather than silently launch atrium without the host.
+        mod = importlib.import_module(host_module)
+        init = getattr(mod, "init_app", None)
+        if callable(init):
+            init(app)
+        else:
+            log.info(
+                "host.init_app.absent", module=host_module
+            )
 
     return app
 

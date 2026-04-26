@@ -22,7 +22,8 @@ import { RolesAdmin } from '@/components/admin/RolesAdmin';
 import { SystemAdmin } from '@/components/admin/SystemAdmin';
 import { TranslationsAdmin } from '@/components/admin/TranslationsAdmin';
 import { UsersAdmin } from '@/components/admin/UsersAdmin';
-import { usePerm } from '@/hooks/useAuth';
+import { useMe, usePerm } from '@/hooks/useAuth';
+import { getAdminTabs } from '@/host/registry';
 
 const TABS = [
   'system',
@@ -35,20 +36,28 @@ const TABS = [
   'reminders',
   'audit',
 ] as const;
-type TabValue = (typeof TABS)[number];
 
 export function AdminPage() {
   const { t } = useTranslation();
+  const { data: me } = useMe();
   const canManageRoles = usePerm('role.manage');
   const canViewAudit = usePerm('audit.read');
   const canManageAppConfig = usePerm('app_setting.manage');
   const canManageEmailTemplates = usePerm('email_template.manage');
 
+  // Host-registered admin tabs; filtered by the perm code each tab
+  // declares (omitted ``perm`` means visible to every viewer of the
+  // admin page).
+  const userPerms = me?.permissions ?? [];
+  const visibleHostTabs = getAdminTabs().filter(
+    (tab) => !tab.perm || userPerms.includes(tab.perm),
+  );
+
   const [searchParams, setSearchParams] = useSearchParams();
-  const requested = searchParams.get('tab') as TabValue | null;
-  const isValid =
+  const requested = searchParams.get('tab');
+  const isBuiltinValid =
     requested !== null &&
-    TABS.includes(requested) &&
+    (TABS as readonly string[]).includes(requested) &&
     (requested !== 'audit' || canViewAudit) &&
     (requested !== 'roles' || canManageRoles) &&
     (requested !== 'branding' || canManageAppConfig) &&
@@ -56,7 +65,9 @@ export function AdminPage() {
     (requested !== 'auth' || canManageAppConfig) &&
     (requested !== 'translations' || canManageAppConfig) &&
     (requested !== 'emails' || canManageEmailTemplates);
-  const active: TabValue = isValid ? requested : 'users';
+  const isHostValid =
+    requested !== null && visibleHostTabs.some((t) => t.key === requested);
+  const active: string = isBuiltinValid || isHostValid ? requested! : 'users';
 
   const onTabChange = (v: string | null) => {
     if (!v) return;
@@ -112,6 +123,15 @@ export function AdminPage() {
               {t('audit.tab')}
             </Tabs.Tab>
           )}
+          {visibleHostTabs.map((tab) => (
+            <Tabs.Tab
+              key={tab.key}
+              value={tab.key}
+              leftSection={tab.icon}
+            >
+              {tab.label}
+            </Tabs.Tab>
+          ))}
         </Tabs.List>
         {canManageAppConfig && (
           <Tabs.Panel value="system" pt="md"><SystemAdmin /></Tabs.Panel>
@@ -138,6 +158,11 @@ export function AdminPage() {
         {canViewAudit && (
           <Tabs.Panel value="audit" pt="md"><AuditAdmin /></Tabs.Panel>
         )}
+        {visibleHostTabs.map((tab) => (
+          <Tabs.Panel key={tab.key} value={tab.key} pt="md">
+            {tab.element}
+          </Tabs.Panel>
+        ))}
       </Tabs>
     </Stack>
   );
