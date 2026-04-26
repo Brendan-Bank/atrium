@@ -197,8 +197,9 @@
     "maintenanceMessage": "Maintenance message",
     "maintenanceWarningTitle": "Heads up",
     "maintenanceWarning": "Only super_admins keep access while this is on. Make sure at least one super_admin can sign in before saving.",
+    "announcementEnabled": "Show announcement",
+    "announcementEnabledHelp": "Render a banner above the app shell for every signed-in user.",
     "announcement": "Announcement",
-    "announcementHelp": "Plain text shown above the app shell to every signed-in user. Leave empty to hide.",
     "announcementPlaceholder": "Scheduled maintenance Saturday 22:00-23:00 UTC.",
     "announcementLevel": "Severity",
     "saved": "System settings saved"
