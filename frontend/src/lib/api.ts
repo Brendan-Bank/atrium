@@ -20,7 +20,12 @@ api.interceptors.response.use(
     const isPublic = url && PUBLIC_401_PATHS.some((p) => url.includes(p));
     if (status === 401 && !isPublic && typeof window !== 'undefined') {
       const path = window.location.pathname;
-      if (path !== '/login' && !path.startsWith('/accept-invite')) {
+      if (
+        path !== '/login' &&
+        !path.startsWith('/accept-invite') &&
+        !path.startsWith('/register') &&
+        !path.startsWith('/verify-email')
+      ) {
         window.location.replace(`/login?from=${encodeURIComponent(path)}`);
       }
     }

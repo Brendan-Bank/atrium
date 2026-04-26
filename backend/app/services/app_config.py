@@ -83,6 +83,14 @@ class AuthConfig(BaseModel):
 
     allow_self_delete: bool = True
     delete_grace_days: int = Field(default=30, ge=0, le=365)
+    # Self-serve signup (Phase 2). Off by default — atrium stays
+    # invite-only until an operator opts in. ``signup_default_role_code``
+    # is the RBAC role assigned to fresh signups; ``user`` is the
+    # zero-permission default. ``require_email_verification`` blocks
+    # login until the verification link is consumed.
+    allow_signup: bool = False
+    signup_default_role_code: str = Field(default="user", max_length=64)
+    require_email_verification: bool = True
 
 
 class _Namespace(BaseModel):
@@ -147,6 +155,13 @@ async def get_public_config(session: AsyncSession) -> dict[str, dict]:
             continue
         model = await get_namespace(session, ns.key)
         out[ns.key] = model.model_dump(mode="json")
+    # Carve-out: the ``auth`` namespace is admin-only (it carries
+    # password-policy and similar values that shouldn't leak), but the
+    # LoginPage needs ``allow_signup`` to gate the "Sign up" link. Pull
+    # only that one boolean into the public bundle under an ``auth``
+    # key — never expose the full AuthConfig publicly.
+    auth_cfg = await get_namespace(session, "auth")
+    out["auth"] = {"allow_signup": getattr(auth_cfg, "allow_signup", False)}
     return out
 
 

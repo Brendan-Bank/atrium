@@ -53,6 +53,16 @@ class User(Base, TimestampMixin):
         DateTime(timezone=False), nullable=True, index=True
     )
 
+    # Set when the self-serve signup flow's verification link is
+    # consumed. ``None`` means the email is unverified — under
+    # ``auth.require_email_verification`` the login path refuses these.
+    # Distinct from ``is_verified`` (which fastapi-users uses for its
+    # own verification flow); we keep both so existing invite-created
+    # accounts (is_verified=True, email_verified_at=None) still pass.
+    email_verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=False), nullable=True
+    )
+
 
 class UserInvite(Base, TimestampMixin):
     """Invitation to create an account. No public signup."""

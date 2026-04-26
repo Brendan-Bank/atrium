@@ -28,10 +28,28 @@
     "password": "Passwort",
     "submit": "Anmelden",
     "forgotPassword": "Passwort vergessen?",
+    "signupCta": "Noch kein Konto? Jetzt registrieren",
     "invalidEmail": "Geben Sie eine gültige E-Mail-Adresse ein",
     "passwordRequired": "Passwort ist erforderlich",
     "invalidCredentials": "Ungültige E-Mail-Adresse oder Passwort",
     "unknownError": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut."
+  },
+  "register": {
+    "title": "Konto erstellen",
+    "intro": "Registrieren Sie sich mit E-Mail-Adresse und Passwort. Wir senden Ihnen einen Link zur Bestätigung Ihrer Adresse.",
+    "fullName": "Vollständiger Name (optional)",
+    "submit": "Konto erstellen",
+    "checkEmailTitle": "Prüfen Sie Ihre E-Mails",
+    "checkEmailBody": "Wir haben einen Bestätigungslink an {{email}} gesendet. Klicken Sie darauf, um die Kontoerstellung abzuschließen.",
+    "signupClosed": "Die Registrierung ist geschlossen. Falls Sie eingeladen wurden, verwenden Sie bitte Ihren Einladungslink.",
+    "emailTaken": "Mit dieser E-Mail-Adresse existiert bereits ein Konto.",
+    "unknownError": "Das Konto konnte nicht erstellt werden. Bitte versuchen Sie es erneut."
+  },
+  "verifyEmail": {
+    "title": "E-Mail bestätigen",
+    "success": "Ihre E-Mail-Adresse ist bestätigt. Sie können sich jetzt anmelden.",
+    "invalid": "Dieser Bestätigungslink ist ungültig oder abgelaufen.",
+    "missing": "Bestätigungstoken fehlt."
   },
   "acceptInvite": {
     "title": "Konto erstellen",

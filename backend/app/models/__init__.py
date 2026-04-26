@@ -6,6 +6,7 @@ from app.models.auth_session import AuthSession
 from app.models.email_otp import EmailOTPChallenge, UserEmailOTP
 from app.models.email_outbox import EmailOutbox
 from app.models.email_template import EmailTemplate
+from app.models.email_verification import EmailVerification
 from app.models.enums import EmailStatus, JobState, Language
 from app.models.ops import AppSetting, AuditLog, EmailLog, Notification, ScheduledJob
 from app.models.rbac import Permission, Role, role_permissions, user_roles
@@ -22,6 +23,7 @@ __all__ = [
     "EmailOutbox",
     "EmailStatus",
     "EmailTemplate",
+    "EmailVerification",
     "JobState",
     "Language",
     "Notification",

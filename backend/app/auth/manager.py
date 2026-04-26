@@ -1,6 +1,7 @@
 from typing import Any
 
 from fastapi import Depends, Request
+from fastapi.security import OAuth2PasswordRequestForm
 from fastapi_users import BaseUserManager, IntegerIDMixin
 from fastapi_users_db_sqlalchemy import SQLAlchemyUserDatabase
 
@@ -27,6 +28,52 @@ class UserManager(IntegerIDMixin, BaseUserManager[User, int]):
 
     async def on_after_register(self, user: User, request: Request | None = None) -> None:
         log.info("user.registered", user_id=user.id, email=user.email)
+
+    async def authenticate(
+        self, credentials: OAuth2PasswordRequestForm
+    ) -> User | None:
+        """Wrap stock fastapi-users auth with the verification gate.
+
+        When ``auth.require_email_verification`` is True we refuse
+        login for any user whose ``email_verified_at`` is None.
+        Returning ``None`` causes fastapi-users to surface a 400, which
+        the frontend already handles for bad credentials (CLAUDE.md
+        gotcha #4) — collapsing both into one error keeps the
+        attacker's view ambiguous.
+
+        We log a clear ``user.login_refused.unverified`` line so an
+        operator can grep for legitimate users hitting this gate.
+        """
+        user = await super().authenticate(credentials)
+        if user is None:
+            return None
+
+        # Lazy import keeps the auth namespace cost off the hot path
+        # for the (rare) case where credentials don't match. Reuse the
+        # request-bound session that backs ``user_db`` rather than
+        # opening a new one — the conftest ``client`` fixture overrides
+        # ``get_session`` to point at the test engine, and a fresh
+        # ``get_session_factory()`` would bypass that.
+        from app.services.app_config import AuthConfig, get_namespace
+
+        cfg = await get_namespace(self.user_db.session, "auth")
+        if (
+            isinstance(cfg, AuthConfig)
+            and cfg.require_email_verification
+            and user.email_verified_at is None
+            # Pre-existing accounts created via invite have
+            # ``is_verified=True`` set on accept, so we honour that as
+            # the legacy verification signal — otherwise flipping the
+            # gate on would lock everyone out.
+            and not user.is_verified
+        ):
+            log.info(
+                "user.login_refused.unverified",
+                user_id=user.id,
+                email=user.email,
+            )
+            return None
+        return user
 
     async def on_after_login(
         self,

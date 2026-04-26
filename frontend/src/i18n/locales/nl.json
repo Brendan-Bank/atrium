@@ -28,10 +28,28 @@
     "password": "Wachtwoord",
     "submit": "Inloggen",
     "forgotPassword": "Wachtwoord vergeten?",
+    "signupCta": "Nog geen account? Registreer",
     "invalidEmail": "Voer een geldig e-mailadres in",
     "passwordRequired": "Wachtwoord is verplicht",
     "invalidCredentials": "Ongeldig e-mailadres of wachtwoord",
     "unknownError": "Er is iets misgegaan. Probeer het opnieuw."
+  },
+  "register": {
+    "title": "Maak je account aan",
+    "intro": "Registreer met een e-mailadres en wachtwoord. We sturen je een link om je adres te verifiëren.",
+    "fullName": "Volledige naam (optioneel)",
+    "submit": "Account aanmaken",
+    "checkEmailTitle": "Controleer je e-mail",
+    "checkEmailBody": "We hebben een verificatielink naar {{email}} gestuurd. Klik erop om je account te activeren.",
+    "signupClosed": "Registratie is gesloten. Als je bent uitgenodigd, gebruik dan je uitnodigingslink.",
+    "emailTaken": "Er bestaat al een account met dat e-mailadres.",
+    "unknownError": "Het account kon niet worden aangemaakt. Probeer het opnieuw."
+  },
+  "verifyEmail": {
+    "title": "E-mail verifiëren",
+    "success": "Je e-mailadres is geverifieerd. Je kunt nu inloggen.",
+    "invalid": "Deze verificatielink is ongeldig of verlopen.",
+    "missing": "Verificatietoken ontbreekt."
   },
   "acceptInvite": {
     "title": "Maak je account aan",

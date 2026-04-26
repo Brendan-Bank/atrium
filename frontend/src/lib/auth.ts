@@ -100,3 +100,16 @@ export async function forgotPassword(email: string): Promise<void> {
 export async function resetPassword(token: string, password: string): Promise<void> {
   await api.post('/auth/reset-password', { token, password });
 }
+
+export async function registerAccount(payload: {
+  email: string;
+  password: string;
+  full_name?: string | null;
+  language?: string;
+}): Promise<void> {
+  await api.post('/auth/register', payload);
+}
+
+export async function verifyEmail(token: string): Promise<void> {
+  await api.post('/auth/verify-email', { token });
+}

@@ -28,10 +28,28 @@
     "password": "Mot de passe",
     "submit": "Se connecter",
     "forgotPassword": "Mot de passe oublié ?",
+    "signupCta": "Pas encore de compte ? Inscrivez-vous",
     "invalidEmail": "Saisissez une adresse e-mail valide",
     "passwordRequired": "Le mot de passe est obligatoire",
     "invalidCredentials": "Adresse e-mail ou mot de passe incorrect",
     "unknownError": "Une erreur s'est produite. Veuillez réessayer."
+  },
+  "register": {
+    "title": "Créez votre compte",
+    "intro": "Inscrivez-vous avec une adresse e-mail et un mot de passe. Nous vous enverrons un lien pour vérifier votre adresse.",
+    "fullName": "Nom complet (optionnel)",
+    "submit": "Créer le compte",
+    "checkEmailTitle": "Consultez votre messagerie",
+    "checkEmailBody": "Nous avons envoyé un lien de vérification à {{email}}. Cliquez dessus pour finaliser la création de votre compte.",
+    "signupClosed": "Les inscriptions sont fermées. Si vous avez été invité, utilisez votre lien d'invitation.",
+    "emailTaken": "Un compte existe déjà avec cette adresse e-mail.",
+    "unknownError": "Impossible de créer le compte. Veuillez réessayer."
+  },
+  "verifyEmail": {
+    "title": "Vérifier votre e-mail",
+    "success": "Votre adresse e-mail est vérifiée. Vous pouvez maintenant vous connecter.",
+    "invalid": "Ce lien de vérification est invalide ou a expiré.",
+    "missing": "Jeton de vérification manquant."
   },
   "acceptInvite": {
     "title": "Créez votre compte",
