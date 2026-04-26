@@ -122,6 +122,44 @@ def run_migrations(mysql_url: str) -> None:
 
 
 @pytest.fixture(autouse=True)
+def _bind_middleware_to_test_engine(monkeypatch, engine, mysql_url):
+    """The maintenance middleware (and any future middleware that
+    talks to the DB) bypasses FastAPI's dependency injection and
+    grabs ``app.db.get_session_factory()`` directly, which is bound
+    to the ``.env`` DSN ("mysql" hostname, only resolvable inside the
+    docker compose network). Repoint the references to the test
+    engine so middleware reads the same DB the request would.
+
+    Also wipes ``app_settings['system']`` after each test so a stuck
+    maintenance flag from a prior test doesn't 503 the rest of the
+    suite. ``app_settings`` is in the conftest truncate-skip list, so
+    flags otherwise persist across tests. The wipe runs through a
+    short-lived sync engine to dodge the cross-test event-loop
+    lifecycle that ``async_sessionmaker`` would tangle with.
+    """
+    from sqlalchemy import create_engine
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    from app.services import maintenance as maintenance_module
+
+    test_factory = async_sessionmaker(engine, expire_on_commit=False)
+    monkeypatch.setattr(
+        maintenance_module, "get_session_factory", lambda: test_factory
+    )
+    maintenance_module.reset_cache()
+    yield
+
+    sync_url = mysql_url.replace("mysql+aiomysql://", "mysql+pymysql://", 1)
+    sync_engine = create_engine(sync_url, pool_pre_ping=True)
+    try:
+        with sync_engine.begin() as conn:
+            conn.execute(text("DELETE FROM app_settings WHERE `key` = 'system'"))
+    finally:
+        sync_engine.dispose()
+    maintenance_module.reset_cache()
+
+
+@pytest.fixture(autouse=True)
 def _auto_pass_2fa(monkeypatch, request):
     """Make every freshly-issued ``AuthSession`` row full-access
     (``totp_passed=True``) by default so tests that just need an
