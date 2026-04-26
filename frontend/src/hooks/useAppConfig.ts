@@ -12,8 +12,24 @@ export interface BrandConfig {
   overrides: Record<string, string>;
 }
 
+export type AnnouncementLevel = 'info' | 'warning' | 'critical';
+
+export interface SystemConfig {
+  maintenance_mode: boolean;
+  maintenance_message: string;
+  announcement: string | null;
+  announcement_level: AnnouncementLevel;
+}
+
+export interface I18nConfig {
+  enabled_locales: string[];
+  overrides: Record<string, Record<string, string>>;
+}
+
 export interface PublicAppConfig {
   brand: BrandConfig;
+  system?: SystemConfig;
+  i18n?: I18nConfig;
 }
 
 export type AdminAppConfig = Record<string, Record<string, unknown>>;

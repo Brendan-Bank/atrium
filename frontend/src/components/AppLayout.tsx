@@ -18,12 +18,14 @@ import {
   IconUser,
   IconLogout,
 } from '@tabler/icons-react';
+import { useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 import { useAppConfig } from '@/hooks/useAppConfig';
 import { useMe, useLogout } from '@/hooks/useAuth';
 
+import { AnnouncementBanner } from './AnnouncementBanner';
 import { ImpersonationBanner } from './ImpersonationBanner';
 import { NotificationsBell } from './NotificationsBell';
 
@@ -56,6 +58,23 @@ export function AppLayout() {
   // this for their own role code as needed.
   const isAdmin = me?.roles.includes('admin') ?? false;
 
+  const configured = appConfig?.i18n?.enabled_locales;
+  const enabledLocales =
+    configured && configured.length > 0 ? configured : ['en', 'nl'];
+
+  const currentLocale = i18n.language.split('-')[0];
+  const activeLocale = enabledLocales.includes(currentLocale)
+    ? currentLocale
+    : enabledLocales[0];
+
+  // If the admin disables the locale the user currently has selected,
+  // fall back to the first enabled one without forcing them to pick.
+  useEffect(() => {
+    if (currentLocale !== activeLocale) {
+      void i18n.changeLanguage(activeLocale);
+    }
+  }, [activeLocale, currentLocale, i18n]);
+
   return (
     <AppShell
       header={{ height: 60 }}
@@ -82,12 +101,12 @@ export function AppLayout() {
             <Select
               size="xs"
               aria-label={t('common.language')}
-              value={i18n.language.startsWith('nl') ? 'nl' : 'en'}
+              value={activeLocale}
               onChange={(v) => v && i18n.changeLanguage(v)}
-              data={[
-                { value: 'en', label: 'EN' },
-                { value: 'nl', label: 'NL' },
-              ]}
+              data={enabledLocales.map((code) => ({
+                value: code,
+                label: code.toUpperCase(),
+              }))}
               w={80}
             />
             {me && (
@@ -156,6 +175,7 @@ export function AppLayout() {
       </AppShell.Navbar>
 
       <AppShell.Main>
+        <AnnouncementBanner />
         <ImpersonationBanner />
         <Outlet />
       </AppShell.Main>

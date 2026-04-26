@@ -3,8 +3,10 @@ import {
   IconBrush,
   IconHistory,
   IconKey,
+  IconLanguage,
   IconMail,
   IconSend,
+  IconServer,
   IconUserPlus,
 } from '@tabler/icons-react';
 import { useTranslation } from 'react-i18next';
@@ -15,17 +17,25 @@ import { BrandingAdmin } from '@/components/admin/BrandingAdmin';
 import { EmailTemplatesAdmin } from '@/components/admin/EmailTemplatesAdmin';
 import { RemindersAdmin } from '@/components/admin/RemindersAdmin';
 import { RolesAdmin } from '@/components/admin/RolesAdmin';
+import { SystemAdmin } from '@/components/admin/SystemAdmin';
+import { TranslationsAdmin } from '@/components/admin/TranslationsAdmin';
 import { UsersAdmin } from '@/components/admin/UsersAdmin';
 import { usePerm } from '@/hooks/useAuth';
 
-const TABS = ['users', 'roles', 'branding', 'emails', 'reminders', 'audit'] as const;
+const TABS = [
+  'users',
+  'roles',
+  'branding',
+  'system',
+  'translations',
+  'emails',
+  'reminders',
+  'audit',
+] as const;
 type TabValue = (typeof TABS)[number];
 
 export function AdminPage() {
   const { t } = useTranslation();
-  // Audit + role administration are guarded server-side; on the client
-  // we just hide the tabs unless the user holds the matching
-  // permissions. Host apps can swap these codes for their own.
   const canManageRoles = usePerm('role.manage');
   const canViewAudit = usePerm('audit.read');
   const canManageAppConfig = usePerm('app_setting.manage');
@@ -37,7 +47,9 @@ export function AdminPage() {
     TABS.includes(requested) &&
     (requested !== 'audit' || canViewAudit) &&
     (requested !== 'roles' || canManageRoles) &&
-    (requested !== 'branding' || canManageAppConfig);
+    (requested !== 'branding' || canManageAppConfig) &&
+    (requested !== 'system' || canManageAppConfig) &&
+    (requested !== 'translations' || canManageAppConfig);
   const active: TabValue = isValid ? requested : 'users';
 
   const onTabChange = (v: string | null) => {
@@ -63,6 +75,19 @@ export function AdminPage() {
               {t('branding.tab')}
             </Tabs.Tab>
           )}
+          {canManageAppConfig && (
+            <Tabs.Tab value="system" leftSection={<IconServer size={14} />}>
+              {t('system.tab')}
+            </Tabs.Tab>
+          )}
+          {canManageAppConfig && (
+            <Tabs.Tab
+              value="translations"
+              leftSection={<IconLanguage size={14} />}
+            >
+              {t('translations.tab')}
+            </Tabs.Tab>
+          )}
           <Tabs.Tab value="emails" leftSection={<IconMail size={14} />}>
             {t('emailTemplates.tab')}
           </Tabs.Tab>
@@ -81,6 +106,14 @@ export function AdminPage() {
         )}
         {canManageAppConfig && (
           <Tabs.Panel value="branding" pt="md"><BrandingAdmin /></Tabs.Panel>
+        )}
+        {canManageAppConfig && (
+          <Tabs.Panel value="system" pt="md"><SystemAdmin /></Tabs.Panel>
+        )}
+        {canManageAppConfig && (
+          <Tabs.Panel value="translations" pt="md">
+            <TranslationsAdmin />
+          </Tabs.Panel>
         )}
         <Tabs.Panel value="emails" pt="md"><EmailTemplatesAdmin /></Tabs.Panel>
         <Tabs.Panel value="reminders" pt="md"><RemindersAdmin /></Tabs.Panel>
