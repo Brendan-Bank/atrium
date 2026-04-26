@@ -57,16 +57,37 @@ async def _session_passed(engine, user_id: int) -> bool:
 
 @pytest.mark.asyncio
 async def test_fresh_user_login_lands_on_partial_session(client, engine):
-    """Every login starts with a partial session — the old "un-enrolled
-    users skip 2FA" path was a bypass. The frontend routes the caller
-    to /2fa based on ``session_passed=false``."""
+    """When ``auth.require_2fa_for_roles`` includes the user's role,
+    fresh login lands on a partial session — the user has no factor
+    yet, so they're held at /2fa with ``2fa_enrollment_required`` until
+    they enrol.
+
+    With opt-in 2FA gating, a fresh login otherwise grants
+    ``totp_passed=True`` for users with no factor and no enforced role.
+    Set enforcement explicitly here so the partial-session path fires
+    for the seeded admin.
+    """
+    from sqlalchemy.dialects.mysql import insert as mysql_insert
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    from app.models.ops import AppSetting
+
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with factory() as s:
+        stmt = mysql_insert(AppSetting).values(
+            key="auth", value={"require_2fa_for_roles": ["admin"]}
+        )
+        stmt = stmt.on_duplicate_key_update(value=stmt.inserted.value)
+        await s.execute(stmt)
+        await s.commit()
+
     owner = await seed_admin(engine)
     await login_partial(client, owner.email, "admin-pw-123")
 
     # Domain endpoint is gated.
     r = await client.get("/users/me/context")
     assert r.status_code == 403
-    assert r.json()["detail"]["code"] == "totp_required"
+    assert r.json()["detail"]["code"] == "2fa_enrollment_required"
 
     # ``/auth/totp/state`` is partial-auth; it reports session_passed=False.
     r = await client.get("/auth/totp/state")

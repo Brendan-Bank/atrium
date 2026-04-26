@@ -78,23 +78,24 @@ class DBSessionJWTStrategy(JWTStrategy[User, int]):
         issued_at = _now_naive()
         expires_at = issued_at + timedelta(seconds=self.lifetime_seconds)
 
-        # Every login starts partial. ``current_user_full`` rejects
-        # partial sessions with a 403 ``totp_required``, which the
-        # frontend turns into a redirect to /2fa. From there:
-        #   * Users who already have a confirmed TOTP or email-OTP
-        #     land on the challenge screen → ``/auth/*/verify``
-        #     flips ``totp_passed`` to True.
-        #   * Users with no confirmed method land on the setup picker
-        #     → ``/auth/*/confirm`` does the same flip after enrollment.
-        # We never grant a full session straight out of password login
-        # — that bypass let unenrolled users skip 2FA entirely.
+        # 2FA is opt-in: a user with no confirmed factor and no role on
+        # ``auth.require_2fa_for_roles`` gets a full session straight
+        # out of password login. Anyone with a confirmed factor must
+        # challenge (``current_user`` raises ``totp_required`` →
+        # frontend routes to /2fa); anyone holding an enforced role
+        # without a factor must enrol (``2fa_enrollment_required``).
+        # Operators who want the legacy "everyone must enrol" posture
+        # populate ``require_2fa_for_roles`` with every role code.
+        from app.auth.two_factor import login_grants_full_session
+
+        full = await login_grants_full_session(self._session, user.id)
         self._session.add(
             AuthSession(
                 session_id=session_id,
                 user_id=user.id,
                 issued_at=issued_at,
                 expires_at=expires_at,
-                totp_passed=False,
+                totp_passed=full,
             )
         )
         await self._session.commit()

@@ -39,6 +39,22 @@ export interface PublicAuthConfig {
   captcha_site_key: string | null;
 }
 
+export interface AuthConfig {
+  allow_self_delete: boolean;
+  delete_grace_days: number;
+  allow_signup: boolean;
+  signup_default_role_code: string;
+  require_email_verification: boolean;
+  password_min_length: number;
+  password_require_mixed_case: boolean;
+  password_require_digit: boolean;
+  password_require_symbol: boolean;
+  password_check_breach: boolean;
+  require_2fa_for_roles: string[];
+  captcha_provider: CaptchaProvider;
+  captcha_site_key: string | null;
+}
+
 export interface PublicAppConfig {
   brand: BrandConfig;
   system?: SystemConfig;

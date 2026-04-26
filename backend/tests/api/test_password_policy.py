@@ -323,3 +323,91 @@ async def test_2fa_enforcement_off_when_role_not_listed(client, engine):
 
     r = await client.get("/users/me/context")
     assert r.status_code == 200, r.text
+
+
+@pytest.mark.real_2fa
+@pytest.mark.asyncio
+async def test_login_grants_full_session_when_unenforced(client, engine):
+    """The strategy itself should write ``totp_passed=True`` when the
+    user has no factor and no role on the enforcement list — without
+    any test-helper bypass. Without this, the frontend still routes
+    fresh logins to /2fa, which is the bug the AuthAdmin tab promises
+    to fix.
+
+    Marked ``real_2fa`` to bypass the conftest ``_auto_pass_2fa``
+    patch; we explicitly wipe the auth namespace too so the enforce
+    fixture's pre-write doesn't dirty the namespace.
+    """
+    from sqlalchemy import select as _select
+
+    from app.models.auth_session import AuthSession
+
+    await _wipe_auth_config(engine)
+    owner = await seed_admin(engine)
+
+    r = await client.post(
+        "/auth/jwt/login",
+        data={"username": owner.email, "password": "admin-pw-123"},
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    assert r.status_code in (200, 204), r.text
+
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with factory() as s:
+        row = (
+            await s.execute(
+                _select(AuthSession).where(
+                    AuthSession.user_id == owner.id,
+                    AuthSession.revoked_at.is_(None),
+                )
+            )
+        ).scalar_one()
+    assert row.totp_passed is True, (
+        "fresh login with no factor and empty require_2fa_for_roles "
+        "must grant a full session — opt-in 2FA contract"
+    )
+
+    r = await client.get("/users/me/context")
+    assert r.status_code == 200, r.text
+
+
+@pytest.mark.real_2fa
+@pytest.mark.asyncio
+async def test_login_stays_partial_when_enforced(client, engine):
+    """Mirror of the above: with ``require_2fa_for_roles`` covering the
+    user's role, the strategy must hold the session partial so the
+    frontend bounces them to /2fa for enrolment."""
+    from sqlalchemy import select as _select
+
+    from app.models.auth_session import AuthSession
+
+    await _set_auth_config(
+        engine, _base_signup_config(require_2fa_for_roles=["admin"])
+    )
+    owner = await seed_admin(engine)
+
+    r = await client.post(
+        "/auth/jwt/login",
+        data={"username": owner.email, "password": "admin-pw-123"},
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    assert r.status_code in (200, 204), r.text
+
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with factory() as s:
+        row = (
+            await s.execute(
+                _select(AuthSession).where(
+                    AuthSession.user_id == owner.id,
+                    AuthSession.revoked_at.is_(None),
+                )
+            )
+        ).scalar_one()
+    assert row.totp_passed is False, (
+        "enforced role + no factor must keep the session partial "
+        "until enrolment"
+    )
+
+    r = await client.get("/users/me/context")
+    assert r.status_code == 403
+    assert r.json()["detail"]["code"] == "2fa_enrollment_required"
