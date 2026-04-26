@@ -42,7 +42,7 @@ async def test_public_endpoint_returns_brand_defaults(client, engine):
     assert brand["name"] == "Atrium"
     assert brand["preset"] == "default"
     assert brand["overrides"] == {}
-    assert brand["logo_url"] is None
+    assert brand["logo_url"] == "/logo.svg"
     assert brand["support_email"] is None
 
 
