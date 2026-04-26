@@ -66,7 +66,7 @@ async def test_self_delete_with_correct_password_anonymises(client, engine):
     assert refreshed.deleted_at is not None
     assert refreshed.scheduled_hard_delete_at is not None
     assert refreshed.is_active is False
-    assert refreshed.email == f"deleted+{user.id}@invalid"
+    assert refreshed.email == f"deleted+{user.id}@deleted.invalid"
     assert refreshed.full_name == "Deleted user"
     assert refreshed.hashed_password == ""
 

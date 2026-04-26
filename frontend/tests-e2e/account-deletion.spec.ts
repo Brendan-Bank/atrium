@@ -54,10 +54,13 @@ test('user can self-delete with password reconfirm', async ({ browser }) => {
       .getByRole('button', { name: /Delete my account/i })
       .click();
 
-    // Modal opens — fill the password and confirm.
-    const passwordInput = userPage.getByLabel(/Password/i, { exact: false }).first();
-    await passwordInput.fill(fresh.password);
-    await userPage
+    // Scope to the open modal — the profile page also carries the
+    // "Change password" form's New / Confirm password fields, so a
+    // page-wide getByLabel(/Password/) would grab the wrong control.
+    const modal = userPage.getByRole('dialog');
+    await expect(modal).toBeVisible();
+    await modal.getByLabel('Password', { exact: true }).fill(fresh.password);
+    await modal
       .getByRole('button', { name: /^Delete account$/i })
       .click();
 
@@ -99,9 +102,12 @@ test('wrong password rejects deletion without action', async ({ browser }) => {
       .getByRole('button', { name: /Delete my account/i })
       .click();
 
-    const passwordInput = userPage.getByLabel(/Password/i, { exact: false }).first();
-    await passwordInput.fill('not-the-real-password');
-    await userPage
+    const modal = userPage.getByRole('dialog');
+    await expect(modal).toBeVisible();
+    await modal
+      .getByLabel('Password', { exact: true })
+      .fill('not-the-real-password');
+    await modal
       .getByRole('button', { name: /^Delete account$/i })
       .click();
 

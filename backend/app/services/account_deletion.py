@@ -32,7 +32,13 @@ from app.services.audit import record as record_audit
 
 
 def _anonymised_email(user_id: int) -> str:
-    return f"deleted+{user_id}@invalid"
+    # ``.invalid`` is a reserved TLD (RFC 2606) — guaranteed not to
+    # resolve. Use ``deleted.invalid`` rather than bare ``invalid`` so
+    # the address still parses as a valid email per the EmailStr
+    # validator (which requires a dot in the domain). Otherwise
+    # ``GET /admin/users`` 500s as soon as it tries to serialize a
+    # soft-deleted row.
+    return f"deleted+{user_id}@deleted.invalid"
 
 
 async def soft_delete_user(
