@@ -100,30 +100,43 @@ export function SystemAdmin() {
       </Paper>
       <Paper withBorder p="md">
         <Stack>
-          <TextInput
-            label={t('system.announcement')}
-            description={t('system.announcementHelp')}
-            placeholder={t('system.announcementPlaceholder')}
-            value={draft.announcement ?? ''}
+          <Switch
+            label={t('system.announcementEnabled')}
+            description={t('system.announcementEnabledHelp')}
+            checked={draft.announcement !== null}
             onChange={(e) =>
               setDraft({
                 ...draft,
-                announcement:
-                  e.currentTarget.value === '' ? null : e.currentTarget.value,
+                announcement: e.currentTarget.checked ? '' : null,
               })
             }
-            maxLength={2000}
           />
-          <Select
-            label={t('system.announcementLevel')}
-            data={LEVEL_OPTIONS}
-            value={draft.announcement_level}
-            onChange={(v) =>
-              v &&
-              setDraft({ ...draft, announcement_level: v as AnnouncementLevel })
-            }
-            allowDeselect={false}
-          />
+          {draft.announcement !== null && (
+            <>
+              <TextInput
+                label={t('system.announcement')}
+                placeholder={t('system.announcementPlaceholder')}
+                value={draft.announcement}
+                onChange={(e) =>
+                  setDraft({ ...draft, announcement: e.currentTarget.value })
+                }
+                maxLength={2000}
+              />
+              <Select
+                label={t('system.announcementLevel')}
+                data={LEVEL_OPTIONS}
+                value={draft.announcement_level}
+                onChange={(v) =>
+                  v &&
+                  setDraft({
+                    ...draft,
+                    announcement_level: v as AnnouncementLevel,
+                  })
+                }
+                allowDeselect={false}
+              />
+            </>
+          )}
         </Stack>
       </Paper>
       <Group justify="flex-end">
