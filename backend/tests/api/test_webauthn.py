@@ -191,6 +191,22 @@ async def test_register_begin_replaces_existing_challenge(
 async def test_register_finish_persists_credential_and_promotes(
     client, engine, monkeypatch
 ):
+    # Force the partial-session path: with opt-in 2FA, a fresh admin
+    # login otherwise grants ``totp_passed=True`` because no enforce
+    # role is configured. Set enforcement explicitly so the webauthn
+    # finish call has something to promote.
+    from sqlalchemy.dialects.mysql import insert as mysql_insert
+    from app.models.ops import AppSetting
+
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with factory() as s:
+        stmt = mysql_insert(AppSetting).values(
+            key="auth", value={"require_2fa_for_roles": ["admin"]}
+        )
+        stmt = stmt.on_duplicate_key_update(value=stmt.inserted.value)
+        await s.execute(stmt)
+        await s.commit()
+
     owner = await seed_admin(engine)
     await login_partial(client, owner.email, "admin-pw-123")
 

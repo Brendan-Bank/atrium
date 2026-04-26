@@ -60,9 +60,27 @@ async def test_fresh_user_login_lands_on_partial_session(client, engine):
     """When ``auth.require_2fa_for_roles`` includes the user's role,
     fresh login lands on a partial session — the user has no factor
     yet, so they're held at /2fa with ``2fa_enrollment_required`` until
-    they enrol. The conftest ``_enforce_2fa_for_real_2fa_tests`` fixture
-    sets enforcement for every system role so this suite exercises the
-    real challenge / setup flow."""
+    they enrol.
+
+    With opt-in 2FA gating, a fresh login otherwise grants
+    ``totp_passed=True`` for users with no factor and no enforced role.
+    Set enforcement explicitly here so the partial-session path fires
+    for the seeded admin.
+    """
+    from sqlalchemy.dialects.mysql import insert as mysql_insert
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    from app.models.ops import AppSetting
+
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with factory() as s:
+        stmt = mysql_insert(AppSetting).values(
+            key="auth", value={"require_2fa_for_roles": ["admin"]}
+        )
+        stmt = stmt.on_duplicate_key_update(value=stmt.inserted.value)
+        await s.execute(stmt)
+        await s.commit()
+
     owner = await seed_admin(engine)
     await login_partial(client, owner.email, "admin-pw-123")
 
