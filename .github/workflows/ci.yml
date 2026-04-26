@@ -137,21 +137,21 @@ jobs:
       - name: Run migrations
         run: make migrate
 
-      - name: Seed owners
-        # Pre-enroll TOTP on the main smoke owner + a second owner
+      - name: Seed admins
+        # Pre-enroll TOTP on the main smoke admin + a second admin
         # pre-enrolled with email OTP for the email-otp.spec. Calling
-        # seed_owner directly (not via ``make seed-owner``) because
+        # seed_admin directly (not via ``make seed-admin``) because
         # the Makefile wrapper doesn't thread --totp-secret /
         # --email-otp through.
         run: |
           docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.e2e.yml run --rm api \
-            python -m app.scripts.seed_owner \
+            python -m app.scripts.seed_admin \
               --email "$E2E_OWNER_EMAIL" \
               --password "$E2E_OWNER_PASSWORD" \
               --full-name 'E2E Owner' \
               --totp-secret "$E2E_OWNER_TOTP_SECRET"
           docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.e2e.yml run --rm api \
-            python -m app.scripts.seed_owner \
+            python -m app.scripts.seed_admin \
               --email "$E2E_EMAIL_OTP_EMAIL" \
               --password "$E2E_EMAIL_OTP_PASSWORD" \
               --full-name 'E2E Email-OTP Owner' \
@@ -211,7 +211,7 @@ jobs:
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
         with:
           scan-type: image
-          image-ref: booking-app-casa-api
+          image-ref: atrium-api
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: '1'
@@ -220,7 +220,7 @@ jobs:
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
         with:
           scan-type: image
-          image-ref: booking-app-casa-web
+          image-ref: atrium-web
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: '1'
