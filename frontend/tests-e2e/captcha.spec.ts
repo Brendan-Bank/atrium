@@ -17,10 +17,10 @@ import { API_URL, loginAsAdmin, loginAsUser } from './helpers';
  *     site key. We assert the *seam* is wired; we do not try to solve
  *     the challenge — Turnstile / hCaptcha both run anti-automation
  *     heuristics that defeat Playwright reliably.
- *   * Admin form — the System tab can flip the provider + site key and
+ *   * Admin form — the Auth tab can flip the provider + site key and
  *     the change lands in the ``auth`` namespace.
  *   * Permission gate — a plain user without ``app_setting.manage``
- *     does not see the System tab, so they cannot see the captcha
+ *     does not see the Auth tab, so they cannot see the captcha
  *     section.
  *
  * The strict success-vs-failure backend path (token=valid →
@@ -346,7 +346,7 @@ test.describe('captcha (Turnstile + hCaptcha)', () => {
     }
   });
 
-  test('admin can switch captcha provider through System tab', async ({
+  test('admin can switch captcha provider through Auth tab', async ({
     browser,
   }) => {
     const adminContext = await browser.newContext();
@@ -354,13 +354,13 @@ test.describe('captcha (Turnstile + hCaptcha)', () => {
     await loginAsAdmin(adminPage);
 
     try {
-      await adminPage.goto('/admin?tab=system');
+      await adminPage.goto('/admin?tab=auth');
 
-      // The System tab carries two save buttons (one for system
-      // settings, one for captcha). Locate the Captcha section by its
-      // title, then operate on the form controls within it. The
-      // Provider Select is a Mantine combobox — click to open, then
-      // click the option labelled "Cloudflare Turnstile".
+      // The Auth tab carries one Save button covering the whole
+      // namespace. Locate the Captcha section by its title, then
+      // operate on the form controls within it. The Provider Select is
+      // a Mantine combobox — click to open, then click the option
+      // labelled "Cloudflare Turnstile".
       await expect(
         adminPage.getByRole('heading', { name: /CAPTCHA/i }),
       ).toBeVisible();
@@ -381,10 +381,7 @@ test.describe('captcha (Turnstile + hCaptcha)', () => {
       const siteKeyInput = adminPage.getByLabel(/^Site key$/i).first();
       await siteKeyInput.fill(typedKey);
 
-      // The captcha section's Save sits below the Site key input;
-      // there's an earlier Save button for system settings. Match the
-      // second occurrence.
-      const saveButtons = adminPage.getByRole('button', { name: /^Save$/ });
+      const saveButton = adminPage.getByRole('button', { name: /^Save$/ });
       // Wait for the PUT to land before reading the namespace, so we
       // don't race the optimistic save.
       const savePromise = adminPage.waitForResponse(
@@ -393,7 +390,7 @@ test.describe('captcha (Turnstile + hCaptcha)', () => {
           resp.request().method() === 'PUT' &&
           resp.ok(),
       );
-      await saveButtons.last().click();
+      await saveButton.last().click();
       await savePromise;
 
       const cfg = await readAuthConfig(adminPage.request);
@@ -409,13 +406,13 @@ test.describe('captcha (Turnstile + hCaptcha)', () => {
     }
   });
 
-  test("non-admin doesn't see captcha config in the System tab", async ({
+  test("non-admin doesn't see captcha config in the Auth tab", async ({
     browser,
   }) => {
     // ``loginAsUser`` mints + logs in a fresh ``user``-roled account.
     // That role holds no permissions by default, so neither
     // ``app_setting.manage`` nor any other admin perm is granted — the
-    // System tab is entirely hidden from them.
+    // Auth tab is entirely hidden from them.
     const userContext = await browser.newContext();
     const userPage = await userContext.newPage();
 
@@ -424,25 +421,25 @@ test.describe('captcha (Turnstile + hCaptcha)', () => {
       await userPage.goto('/admin');
 
       // Wait for the always-present Users tab so we know the page
-      // mounted before asserting the System tab is absent.
+      // mounted before asserting the Auth tab is absent.
       await expect(
         userPage.getByRole('tab', { name: /Users|Gebruikers/i }),
       ).toBeVisible();
       await expect(
-        userPage.getByRole('tab', { name: /^System$|^Systeem$/i }),
+        userPage.getByRole('tab', { name: /^Auth$/i }),
       ).toHaveCount(0);
 
       // Direct-URL access falls through to the default Users tab —
-      // AdminPage validates ``?tab=system`` against the user's perms.
-      await userPage.goto('/admin?tab=system');
+      // AdminPage validates ``?tab=auth`` against the user's perms.
+      await userPage.goto('/admin?tab=auth');
       await expect(
         userPage.getByRole('tab', { name: /Users|Gebruikers/i }),
       ).toHaveAttribute('aria-selected', 'true');
 
       // And the captcha-specific UI must not be reachable: no
       // "CAPTCHA" heading, no "Site key" or "Provider" inputs — those
-      // belong to the SystemAdmin component which never mounts for
-      // this user.
+      // belong to the AuthAdmin component which never mounts for this
+      // user.
       await expect(
         userPage.getByRole('heading', { name: /CAPTCHA/i }),
       ).toHaveCount(0);

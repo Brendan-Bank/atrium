@@ -4,6 +4,7 @@ import {
   IconHistory,
   IconKey,
   IconLanguage,
+  IconLock,
   IconMail,
   IconSend,
   IconServer,
@@ -13,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 
 import { AuditAdmin } from '@/components/admin/AuditAdmin';
+import { AuthAdmin } from '@/components/admin/AuthAdmin';
 import { BrandingAdmin } from '@/components/admin/BrandingAdmin';
 import { EmailTemplatesAdmin } from '@/components/admin/EmailTemplatesAdmin';
 import { RemindersAdmin } from '@/components/admin/RemindersAdmin';
@@ -23,10 +25,11 @@ import { UsersAdmin } from '@/components/admin/UsersAdmin';
 import { usePerm } from '@/hooks/useAuth';
 
 const TABS = [
-  'users',
-  'roles',
-  'branding',
   'system',
+  'auth',
+  'users',
+  'branding',
+  'roles',
   'translations',
   'emails',
   'reminders',
@@ -50,6 +53,7 @@ export function AdminPage() {
     (requested !== 'roles' || canManageRoles) &&
     (requested !== 'branding' || canManageAppConfig) &&
     (requested !== 'system' || canManageAppConfig) &&
+    (requested !== 'auth' || canManageAppConfig) &&
     (requested !== 'translations' || canManageAppConfig) &&
     (requested !== 'emails' || canManageEmailTemplates);
   const active: TabValue = isValid ? requested : 'users';
@@ -64,22 +68,27 @@ export function AdminPage() {
       <Title order={2}>{t('nav.admin')}</Title>
       <Tabs value={active} onChange={onTabChange} keepMounted={false}>
         <Tabs.List>
+          {canManageAppConfig && (
+            <Tabs.Tab value="system" leftSection={<IconServer size={14} />}>
+              {t('system.tab')}
+            </Tabs.Tab>
+          )}
+          {canManageAppConfig && (
+            <Tabs.Tab value="auth" leftSection={<IconLock size={14} />}>
+              {t('authAdmin.tab')}
+            </Tabs.Tab>
+          )}
           <Tabs.Tab value="users" leftSection={<IconUserPlus size={14} />}>
             {t('users.tab')}
           </Tabs.Tab>
-          {canManageRoles && (
-            <Tabs.Tab value="roles" leftSection={<IconKey size={14} />}>
-              {t('roles.tab')}
-            </Tabs.Tab>
-          )}
           {canManageAppConfig && (
             <Tabs.Tab value="branding" leftSection={<IconBrush size={14} />}>
               {t('branding.tab')}
             </Tabs.Tab>
           )}
-          {canManageAppConfig && (
-            <Tabs.Tab value="system" leftSection={<IconServer size={14} />}>
-              {t('system.tab')}
+          {canManageRoles && (
+            <Tabs.Tab value="roles" leftSection={<IconKey size={14} />}>
+              {t('roles.tab')}
             </Tabs.Tab>
           )}
           {canManageAppConfig && (
@@ -104,15 +113,18 @@ export function AdminPage() {
             </Tabs.Tab>
           )}
         </Tabs.List>
-        <Tabs.Panel value="users" pt="md"><UsersAdmin /></Tabs.Panel>
-        {canManageRoles && (
-          <Tabs.Panel value="roles" pt="md"><RolesAdmin /></Tabs.Panel>
+        {canManageAppConfig && (
+          <Tabs.Panel value="system" pt="md"><SystemAdmin /></Tabs.Panel>
         )}
+        {canManageAppConfig && (
+          <Tabs.Panel value="auth" pt="md"><AuthAdmin /></Tabs.Panel>
+        )}
+        <Tabs.Panel value="users" pt="md"><UsersAdmin /></Tabs.Panel>
         {canManageAppConfig && (
           <Tabs.Panel value="branding" pt="md"><BrandingAdmin /></Tabs.Panel>
         )}
-        {canManageAppConfig && (
-          <Tabs.Panel value="system" pt="md"><SystemAdmin /></Tabs.Panel>
+        {canManageRoles && (
+          <Tabs.Panel value="roles" pt="md"><RolesAdmin /></Tabs.Panel>
         )}
         {canManageAppConfig && (
           <Tabs.Panel value="translations" pt="md">
