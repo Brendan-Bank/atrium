@@ -17,12 +17,14 @@ from datetime import UTC, datetime
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
+from sqlalchemy import and_, exists, select
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 
 from app.db import get_engine, get_session_factory
 from app.jobs.builtin_handlers import register_builtin_handlers
 from app.jobs.runner import run_one
 from app.logging import configure_logging, log
+from app.models.email_outbox import EmailOutbox
 from app.models.enums import JobState
 from app.models.ops import AppSetting, ScheduledJob
 
@@ -31,6 +33,8 @@ MAX_JOBS_PER_TICK = 50
 HEARTBEAT_INTERVAL_SECONDS = 30
 HEARTBEAT_KEY = "worker_heartbeat"
 AUDIT_PRUNE_INTERVAL_SECONDS = 24 * 60 * 60
+OUTBOX_DRAIN_INTERVAL_SECONDS = 60
+MAX_OUTBOX_PER_TICK = 50
 
 
 async def _tick() -> None:
@@ -47,6 +51,60 @@ async def _tick() -> None:
                 return
         if not did_work:
             return
+
+
+async def _drain_outbox() -> None:
+    """Convert due ``email_outbox`` rows into ``scheduled_jobs`` rows.
+
+    The outbox is the durable side of the email queue; the scheduled
+    jobs table is what the runner actually drains. Bridging the two on
+    a 60s tick lets ``enqueue_and_log`` callers stay simple (just
+    insert a pending row) and keeps the runner's contract narrow (one
+    job, one handler invocation).
+
+    The exists()-guard keeps rapid ticks from piling up duplicate
+    scheduled_jobs for the same outbox row when a previous tick's job
+    hasn't been claimed yet.
+    """
+    factory = get_session_factory()
+    async with factory() as session:
+        try:
+            stmt = (
+                select(EmailOutbox.id)
+                .where(
+                    EmailOutbox.status == "pending",
+                    EmailOutbox.next_attempt_at
+                    <= datetime.now(UTC).replace(tzinfo=None),
+                    ~exists().where(
+                        and_(
+                            ScheduledJob.job_type == "email_send",
+                            ScheduledJob.state == JobState.PENDING.value,
+                            ScheduledJob.payload["outbox_id"] == EmailOutbox.id,
+                        )
+                    ),
+                )
+                .order_by(EmailOutbox.next_attempt_at.asc(), EmailOutbox.id.asc())
+                .limit(MAX_OUTBOX_PER_TICK)
+            )
+            outbox_ids = (await session.execute(stmt)).scalars().all()
+            if not outbox_ids:
+                return
+
+            run_at = datetime.now(UTC).replace(tzinfo=None)
+            for outbox_id in outbox_ids:
+                session.add(
+                    ScheduledJob(
+                        job_type="email_send",
+                        run_at=run_at,
+                        state=JobState.PENDING.value,
+                        payload={"outbox_id": int(outbox_id)},
+                    )
+                )
+            await session.commit()
+            log.info("worker.outbox_drain", enqueued=len(outbox_ids))
+        except Exception as exc:
+            log.error("worker.outbox_drain.failed", error=str(exc))
+            await session.rollback()
 
 
 async def _heartbeat() -> None:
@@ -122,6 +180,13 @@ async def main() -> None:
         coalesce=True,
         max_instances=1,
     )
+    scheduler.add_job(
+        _drain_outbox,
+        trigger=IntervalTrigger(seconds=OUTBOX_DRAIN_INTERVAL_SECONDS),
+        id="email-outbox-drain",
+        coalesce=True,
+        max_instances=1,
+    )
     scheduler.start()
 
     # Kick once immediately so /health doesn't see a "worker: no heartbeat"
@@ -129,6 +194,7 @@ async def main() -> None:
     # just-created booking's "agent_blocked_dates" fires without waiting a
     # full poll interval after worker start.
     await _heartbeat()
+    await _drain_outbox()
     await _tick()
 
     stop = asyncio.Event()

@@ -13,11 +13,12 @@ from html import unescape
 from typing import Any
 
 from jinja2 import BaseLoader, Environment, StrictUndefined
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.email.backend import EmailMessage, get_mail_backend
 from app.logging import log
+from app.models.email_outbox import EmailOutbox
 from app.models.email_template import EmailTemplate
 from app.models.enums import EmailStatus
 from app.models.ops import EmailLog
@@ -151,3 +152,57 @@ async def send_and_log(
     await session.flush()
     if error is not None:
         raise RuntimeError(error)
+
+
+async def enqueue_and_log(
+    session: AsyncSession,
+    *,
+    template: str,
+    to: list[str],
+    context: dict[str, Any],
+    entity_type: str | None = None,
+    entity_id: int | None = None,
+) -> list[EmailOutbox]:
+    """Queue an email for durable, retried delivery.
+
+    Inserts one ``email_outbox`` row per recipient (status=``pending``,
+    next_attempt_at=now) plus a corresponding ``email_log`` row with
+    ``status=queued``. The worker drains pending rows via the
+    ``email_send`` job handler (exponential backoff, dead-letter on
+    repeated failure) — this function does NOT send.
+
+    The template existence is validated up-front so a typo or missing
+    row fails the caller's request synchronously instead of leaving a
+    stuck row that only fails when drained. Caller controls the
+    transaction; nothing is committed here.
+    """
+    await _load_template(session, template)
+
+    rows: list[EmailOutbox] = []
+    for addr in to:
+        outbox = EmailOutbox(
+            template=template,
+            to_addr=addr,
+            context=context,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            status="pending",
+            attempts=0,
+            next_attempt_at=func.now(),
+        )
+        session.add(outbox)
+        rows.append(outbox)
+        session.add(
+            EmailLog(
+                entity_type=entity_type,
+                entity_id=entity_id,
+                to_addr=addr,
+                # Subject isn't rendered yet; record the template key so
+                # the admin mail log can still attribute the row.
+                subject=f"[queued] {template}",
+                template=template,
+                status=EmailStatus.QUEUED.value,
+            )
+        )
+    await session.flush()
+    return rows

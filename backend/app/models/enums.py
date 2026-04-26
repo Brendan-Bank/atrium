@@ -9,6 +9,7 @@ class JobState(StrEnum):
 
 
 class EmailStatus(StrEnum):
+    QUEUED = "queued"
     SENT = "sent"
     FAILED = "failed"
 
