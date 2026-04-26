@@ -162,10 +162,12 @@ test('admin can delete a user from the admin UI', async ({ browser }) => {
 
     await adminPage.goto('/admin?tab=users');
 
-    // Find the row for the fresh user. The Users table renders the
-    // email in its own cell; navigating through the row gives us the
-    // delete button.
-    const row = adminPage.locator('tr', { hasText: fresh.email });
+    // The Users tab carries two tables — Users and Invitations. The
+    // freshly-created user appears in BOTH (one as a user record, the
+    // other as the accepted invite that minted them) with the same
+    // email. Scope to the first table to avoid strict-mode violations.
+    const usersTable = adminPage.locator('table').first();
+    const row = usersTable.locator('tr', { hasText: fresh.email });
     await expect(row).toBeVisible();
 
     // The trash icon button has aria-label="Delete" (t('common.delete')).

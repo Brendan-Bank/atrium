@@ -365,12 +365,16 @@ test.describe('captcha (Turnstile + hCaptcha)', () => {
         adminPage.getByRole('heading', { name: /CAPTCHA/i }),
       ).toBeVisible();
 
-      const providerSelect = adminPage
-        .getByLabel(/^Provider$/i)
-        .first();
-      await providerSelect.click();
+      // Mantine v9's Select renders the input wrapped in a Combobox
+      // primitive whose dropdown lives in a portal. Click the input
+      // to open the dropdown, then pick the option by its visible
+      // text rather than role — the option DOM has differed across
+      // Mantine point releases.
+      await adminPage.getByLabel(/^Provider$/i).first().click();
       await adminPage
-        .getByRole('option', { name: /Cloudflare Turnstile/i })
+        .locator('[role="option"], [data-combobox-option]')
+        .filter({ hasText: 'Cloudflare Turnstile' })
+        .first()
         .click();
 
       const typedKey = `e2e-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;

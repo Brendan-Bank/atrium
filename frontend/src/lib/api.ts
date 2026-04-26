@@ -8,9 +8,15 @@ export const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Routes where a 401 is expected (e.g. the initial /me probe before login)
-// — for everything else, kick the user back to /login.
-const PUBLIC_401_PATHS = ['/users/me', '/auth/jwt/login'];
+// Routes where a 401 is expected and the page handles it locally —
+// don't kick the user back to /login. Examples: the initial /me
+// probe before login, the password-reconfirm on self-delete (a
+// 401 means "wrong password", which the modal renders inline).
+const PUBLIC_401_PATHS = [
+  '/users/me',
+  '/users/me/delete',
+  '/auth/jwt/login',
+];
 
 api.interceptors.response.use(
   (resp) => resp,
