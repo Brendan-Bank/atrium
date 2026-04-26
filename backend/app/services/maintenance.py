@@ -56,13 +56,26 @@ _cache: dict[str, object] = {"flag": False, "message": "", "expires_at": 0.0}
 
 
 async def _read_system_flag() -> tuple[bool, str]:
-    factory = get_session_factory()
-    async with factory() as session:
-        raw = (
-            await session.execute(
-                select(AppSetting.value).where(AppSetting.key == "system")
-            )
-        ).scalar_one_or_none()
+    """Look up ``app_settings['system']``. Fail open on any error.
+
+    A fresh deployment that hasn't run alembic yet has no
+    ``app_settings`` table — and the smoke flow's ``/readyz`` poll
+    can't migrate until the API answers. If we 500 on the missing
+    table, the pre-migration readiness check loops forever. Same
+    posture if the DB is briefly unreachable: better to admit traffic
+    than to lock the platform down on transient infra issues.
+    """
+    try:
+        factory = get_session_factory()
+        async with factory() as session:
+            raw = (
+                await session.execute(
+                    select(AppSetting.value).where(AppSetting.key == "system")
+                )
+            ).scalar_one_or_none()
+    except Exception as exc:
+        log.warning("maintenance.read_failed", error=str(exc))
+        return False, ""
     if raw is None:
         return False, ""
     return bool(raw.get("maintenance_mode")), str(raw.get("maintenance_message", ""))
@@ -143,12 +156,16 @@ class MaintenanceMiddleware(BaseHTTPMiddleware):
     nothing else."""
 
     async def dispatch(self, request: Request, call_next):
-        flag, message = await _get_flag()
-        if not flag:
-            return await call_next(request)
-
+        # Bypass-path check FIRST — it's free and avoids hitting the DB
+        # on /healthz, /readyz, the auth flow, and /app-config. The
+        # smoke-up flow polls /readyz before running alembic, so a DB
+        # query here would deadlock the bring-up sequence.
         path = request.url.path
         if _is_bypass_path(path):
+            return await call_next(request)
+
+        flag, message = await _get_flag()
+        if not flag:
             return await call_next(request)
 
         token = request.cookies.get("atrium_auth")

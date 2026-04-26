@@ -58,14 +58,24 @@ _GATED_PATHS: Final = frozenset({
 
 async def _read_captcha_provider() -> str:
     """Tiny helper around the ``auth`` namespace lookup that doesn't
-    require an injected session — the middleware doesn't have one."""
-    factory = get_session_factory()
-    async with factory() as session:
-        raw = (
-            await session.execute(
-                select(AppSetting.value).where(AppSetting.key == "auth")
-            )
-        ).scalar_one_or_none()
+    require an injected session — the middleware doesn't have one.
+
+    Fails open on any DB error (missing table on a pre-migration
+    deployment, transient infra). Same posture as the rest of this
+    module: an upstream / DB issue must not lock users out of
+    auth-flow endpoints.
+    """
+    try:
+        factory = get_session_factory()
+        async with factory() as session:
+            raw = (
+                await session.execute(
+                    select(AppSetting.value).where(AppSetting.key == "auth")
+                )
+            ).scalar_one_or_none()
+    except Exception as exc:
+        log.warning("captcha.read_failed", error=str(exc))
+        return "none"
     if raw is None:
         return "none"
     return str(raw.get("captcha_provider", "none"))
