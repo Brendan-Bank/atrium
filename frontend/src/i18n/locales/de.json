@@ -206,6 +206,9 @@
     "subject": "Betreff",
     "body": "Inhalt",
     "description": "Beschreibung",
+    "locale": "Sprache",
+    "locales": "Sprachen",
+    "localeMissing": "Noch keine Übersetzung für diese Sprache. Speichern, um sie anzulegen.",
     "saved": "Vorlage gespeichert",
     "jinjaHint": "Jinja-Vorlagenausdrücke werden beim Versand ausgewertet. Verfügbare Variablen finden Sie in der Dokumentation Ihrer Host-App."
   },

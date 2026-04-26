@@ -225,6 +225,9 @@
     "subject": "Subject",
     "body": "Body",
     "description": "Description",
+    "locale": "Locale",
+    "locales": "Locales",
+    "localeMissing": "No translation for this locale yet. Save to create it.",
     "saved": "Template saved",
     "jinjaHint": "Jinja template expressions are rendered at send time. Refer to your host app's documentation for available variables."
   },

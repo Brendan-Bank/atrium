@@ -110,6 +110,7 @@ async def soft_delete_user(
                 "date": hard_delete_at.date().isoformat(),
                 "support_email": support_email,
             },
+            locale=user.preferred_language or "en",
         )
 
     await record_audit(

@@ -54,6 +54,12 @@ class EmailOutbox(Base, TimestampMixin):
         server_default=func.now(),
     )
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Locale the queued email should render against. Persisted on the
+    # row so the worker re-renders the same translation on retry, even
+    # if the recipient's preferred_language changes after enqueue.
+    locale: Mapped[str] = mapped_column(
+        String(10), nullable=False, default="en", server_default="en"
+    )
 
     __table_args__ = (
         Index("ix_email_outbox_status_next_attempt_at", "status", "next_attempt_at"),

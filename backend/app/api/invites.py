@@ -123,6 +123,11 @@ async def create_invite(
                     "full_name": "",
                 },
             },
+            # Recipient has no preferred_language yet (they don't have
+            # a User row) - use the inviter's so an admin in NL sends
+            # Dutch invites by default. Falls back to EN when the
+            # inviter has no preference set.
+            locale=owner.preferred_language or "en",
         )
         await session.commit()
     except Exception as exc:
