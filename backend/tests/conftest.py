@@ -160,7 +160,14 @@ def _bind_middleware_to_test_engine(monkeypatch, engine, mysql_url):
     sync_engine = create_engine(sync_url, pool_pre_ping=True)
     try:
         with sync_engine.begin() as conn:
-            conn.execute(text("DELETE FROM app_settings WHERE `key` = 'system'"))
+            # Wipe every namespace a middleware reads on the hot path —
+            # ``system`` (maintenance) and ``auth`` (captcha provider).
+            # Tests that need a specific value re-set it inside the test
+            # body; this teardown stops a stuck flag from poisoning the
+            # rest of the suite.
+            conn.execute(
+                text("DELETE FROM app_settings WHERE `key` IN ('system', 'auth')")
+            )
     finally:
         sync_engine.dispose()
     maintenance_module.reset_cache()
