@@ -211,8 +211,11 @@ jobs:
     # Runs in parallel with the existing e2e job. They cover different
     # ground: ``e2e`` runs atrium with no host module; this one runs
     # atrium with the example wired in.
+    # No needs: — runs in parallel with backend/frontend/e2e/compose-build,
+    # same as the existing e2e job. Gating on backend/frontend would only
+    # postpone the failure feedback on a red PR; on a green PR the
+    # minutes are spent either way.
     runs-on: ubuntu-latest
-    needs: [backend, frontend]
     env:
       E2E_ADMIN_EMAIL: admin@example.com
       E2E_ADMIN_PASSWORD: smoke-pw-12345

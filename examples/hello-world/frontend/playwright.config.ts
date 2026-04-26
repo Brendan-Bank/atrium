@@ -28,10 +28,13 @@ export default defineConfig({
   // headroom for cold-cache CI runs without letting a hang go silent.
   timeout: 30_000,
   expect: {
-    // Polled assertions like toBeVisible/toHaveText fail in ~3 s.
-    // Atrium's home widget renders well under a second once the host
-    // bundle has loaded; 3 s is comfortably above that.
-    timeout: 3_000,
+    // Polled assertions like toBeVisible/toHaveText. The widget
+    // depends on a first browser-side fetch of /hello/state — local
+    // sees that in <1 s, CI runners with cold docker networks
+    // measured 4-5 s for the first request. 8 s is a comfortable
+    // upper bound for "this is broken" while still surfacing real
+    // failures within seconds.
+    timeout: 8_000,
   },
   reporter: [['list'], ['html', { open: 'never', outputFolder: 'playwright-report' }]],
   use: {
