@@ -6,6 +6,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api.admin_roles import router as admin_roles_router
 from app.api.admin_users import router as admin_users_router
+from app.api.app_config import admin_router as app_config_admin_router
+from app.api.app_config import public_router as app_config_public_router
 from app.api.audit import router as audit_router
 from app.api.email_otp import router as email_otp_router
 from app.api.email_templates import router as email_templates_router
@@ -116,6 +118,8 @@ def create_app() -> FastAPI:
         tags=["users"],
     )
 
+    app.include_router(app_config_public_router)
+    app.include_router(app_config_admin_router)
     app.include_router(invites_router)
     app.include_router(notifications_router)
     app.include_router(admin_users_router)

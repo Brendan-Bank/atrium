@@ -15,5 +15,10 @@ export type {
   ReminderKind,
 } from '@/hooks/useReminderRules';
 export type { EmailTemplate } from '@/hooks/useEmailTemplates';
+export type {
+  BrandConfig,
+  PublicAppConfig,
+  ThemePreset,
+} from '@/hooks/useAppConfig';
 export type { AuthSessionRead as AuthSession } from '@/hooks/useSessions';
 export type { AuditEntry as AuditLog } from '@/hooks/useAudit';

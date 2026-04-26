@@ -1,0 +1,59 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+
+import { api } from '@/lib/api';
+
+export type ThemePreset = 'default' | 'dark-glass' | 'classic';
+
+export interface BrandConfig {
+  name: string;
+  logo_url: string | null;
+  support_email: string | null;
+  preset: ThemePreset;
+  overrides: Record<string, string>;
+}
+
+export interface PublicAppConfig {
+  brand: BrandConfig;
+}
+
+export type AdminAppConfig = Record<string, Record<string, unknown>>;
+
+const PUBLIC_KEY = ['app-config'] as const;
+const ADMIN_KEY = ['admin', 'app-config'] as const;
+
+export function useAppConfig() {
+  return useQuery({
+    queryKey: PUBLIC_KEY,
+    queryFn: async () => (await api.get<PublicAppConfig>('/app-config')).data,
+    // /app-config is hit on every cold load before /users/me — if we
+    // refetch on every focus, the Mantine theme would flicker on tab
+    // switches. The admin Branding form invalidates this key on save.
+    staleTime: Infinity,
+    retry: false,
+  });
+}
+
+export function useAdminAppConfig() {
+  return useQuery({
+    queryKey: ADMIN_KEY,
+    queryFn: async () =>
+      (await api.get<AdminAppConfig>('/admin/app-config')).data,
+  });
+}
+
+export function useUpdateAppConfigNamespace(namespace: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: Record<string, unknown>) =>
+      (
+        await api.put<Record<string, unknown>>(
+          `/admin/app-config/${namespace}`,
+          payload,
+        )
+      ).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ADMIN_KEY });
+      qc.invalidateQueries({ queryKey: PUBLIC_KEY });
+    },
+  });
+}
