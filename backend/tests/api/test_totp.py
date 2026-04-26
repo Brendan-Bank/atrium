@@ -57,16 +57,19 @@ async def _session_passed(engine, user_id: int) -> bool:
 
 @pytest.mark.asyncio
 async def test_fresh_user_login_lands_on_partial_session(client, engine):
-    """Every login starts with a partial session — the old "un-enrolled
-    users skip 2FA" path was a bypass. The frontend routes the caller
-    to /2fa based on ``session_passed=false``."""
+    """When ``auth.require_2fa_for_roles`` includes the user's role,
+    fresh login lands on a partial session — the user has no factor
+    yet, so they're held at /2fa with ``2fa_enrollment_required`` until
+    they enrol. The conftest ``_enforce_2fa_for_real_2fa_tests`` fixture
+    sets enforcement for every system role so this suite exercises the
+    real challenge / setup flow."""
     owner = await seed_admin(engine)
     await login_partial(client, owner.email, "admin-pw-123")
 
     # Domain endpoint is gated.
     r = await client.get("/users/me/context")
     assert r.status_code == 403
-    assert r.json()["detail"]["code"] == "totp_required"
+    assert r.json()["detail"]["code"] == "2fa_enrollment_required"
 
     # ``/auth/totp/state`` is partial-auth; it reports session_passed=False.
     r = await client.get("/auth/totp/state")

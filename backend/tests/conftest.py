@@ -174,6 +174,46 @@ def _bind_middleware_to_test_engine(monkeypatch, engine, mysql_url):
 
 
 @pytest.fixture(autouse=True)
+def _enforce_2fa_for_real_2fa_tests(request, mysql_url):
+    """For tests marked ``real_2fa``, populate
+    ``auth.require_2fa_for_roles`` with every system role code so a
+    fresh login lands on a partial session.
+
+    With opt-in 2FA gating (the default after the AuthAdmin tab landed),
+    a user with no factor and no enforced role gets a full session
+    straight out of password login. The TOTP / email-OTP / WebAuthn
+    suites all assume the legacy "fresh login is partial" posture so
+    they can drive the setup or challenge flow — restore that posture
+    just for these tests, via a pre-test write to the auth namespace.
+    The autouse cleanup wipes the row after the test.
+    """
+    if "real_2fa" not in request.keywords:
+        return
+
+    from sqlalchemy import create_engine, text
+
+    sync_url = mysql_url.replace("mysql+aiomysql://", "mysql+pymysql://", 1)
+    sync_engine = create_engine(sync_url, pool_pre_ping=True)
+    try:
+        with sync_engine.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO app_settings (`key`, value) "
+                    "VALUES ('auth', :v) "
+                    "ON DUPLICATE KEY UPDATE value = :v"
+                ),
+                {
+                    "v": (
+                        '{"require_2fa_for_roles": '
+                        '["admin", "super_admin", "user"]}'
+                    )
+                },
+            )
+    finally:
+        sync_engine.dispose()
+
+
+@pytest.fixture(autouse=True)
 def _auto_pass_2fa(monkeypatch, request):
     """Make every freshly-issued ``AuthSession`` row full-access
     (``totp_passed=True``) by default so tests that just need an

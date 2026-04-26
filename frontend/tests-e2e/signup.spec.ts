@@ -287,8 +287,10 @@ test.describe('signup + email verification', () => {
       ).toBeVisible();
 
       // Now we should be able to log in with the credentials. The
-      // freshly-verified user has no second-factor enrolled, so they
-      // land on /2fa for the setup picker.
+      // freshly-verified user has no second-factor enrolled and the
+      // ``user`` role isn't on ``auth.require_2fa_for_roles`` (the
+      // empty-list default), so opt-in 2FA grants a full session out
+      // of password login — they land on the app shell, not /2fa.
       await visitorPage.goto('/login');
       await visitorPage
         .getByLabel(/email/i, { exact: false })
@@ -302,7 +304,10 @@ test.describe('signup + email verification', () => {
         .getByRole('button', { name: /log in/i })
         .click();
 
-      await expect(visitorPage).toHaveURL(/\/2fa/);
+      await expect(visitorPage).toHaveURL('/');
+      await expect(
+        visitorPage.getByRole('heading', { name: /Welcome/i }),
+      ).toBeVisible();
     } finally {
       await visitorContext.close();
     }
