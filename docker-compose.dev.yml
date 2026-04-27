@@ -4,18 +4,18 @@
 # Dev overrides. Usage:
 #   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 #
-# - Traefik is disabled (talk to api/web directly on host ports)
-# - MySQL exposed on 127.0.0.1:3306
 # - Backend runs uvicorn with --reload, source bind-mounted
-# - Frontend runs `vite` dev server on 5173
+# - Frontend (Vite dev server with HMR) is added back as the `web`
+#   service — the prod compose has no separate web container because
+#   atrium serves the built SPA from the api process, but for dev we
+#   keep Vite for hot-module-reload while editing the React tree.
+# - MySQL exposed on 127.0.0.1:3306
 
 services:
-  traefik:
-    profiles: ["disabled"]
-
   api:
     build:
-      context: ./backend
+      context: .
+      dockerfile: Dockerfile
       target: dev
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     volumes:
@@ -24,15 +24,11 @@ services:
       - "127.0.0.1:8000:8000"
     environment:
       APP_BASE_URL: http://localhost:5173
-      # /health probes the web container via this URL. Dev runs vite
-      # on 5173; prod serves nginx on 80 (the default in code).
-      HEALTH_WEB_URL: http://web:5173/
-    labels:
-      - traefik.enable=false
 
   worker:
     build:
-      context: ./backend
+      context: .
+      dockerfile: Dockerfile
       target: dev
     command: ["python", "-m", "app.worker"]
     volumes:
@@ -40,8 +36,9 @@ services:
 
   web:
     build:
-      context: ./frontend
-      target: dev
+      context: .
+      dockerfile: Dockerfile
+      target: frontend-dev
     command: ["pnpm", "dev", "--host", "0.0.0.0", "--port", "5173"]
     volumes:
       - ./frontend:/app
@@ -56,8 +53,8 @@ services:
       # Forwarded from the host .env so Vite's %VITE_*% HTML-var
       # substitution can inject the CKEditor license into index.html.
       VITE_CKEDITOR_LICENSE_KEY: ${VITE_CKEDITOR_LICENSE_KEY:-GPL}
-    labels:
-      - traefik.enable=false
+    networks:
+      - edge
 
   mysql:
     ports:

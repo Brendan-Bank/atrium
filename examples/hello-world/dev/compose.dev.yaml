@@ -1,0 +1,64 @@
+# Copyright (c) 2026 Brendan Bank
+# SPDX-License-Identifier: BSD-2-Clause
+
+# Hello World example — dev overlay.
+#
+# Layers on top of the root atrium dev stack to add the host extension
+# via bind-mount (so editing examples/hello-world/backend triggers
+# uvicorn --reload). The host SPA bundle is served by a sidecar nginx
+# on its own port — Vite's dev server can't serve the prebuilt bundle
+# cleanly (it tries to transform it as source).
+#
+# Usage (from repo root — Compose resolves bind paths relative to the
+# directory of the first compose file, which is why the paths below
+# are repo-relative even though this overlay lives in dev/):
+#
+#   cd examples/hello-world/frontend && pnpm install && pnpm build
+#   cd ../../..
+#   docker compose -f docker-compose.yml \
+#                  -f docker-compose.dev.yml \
+#                  -f examples/hello-world/dev/compose.dev.yaml up -d
+#   docker compose ... exec api alembic -c /host_app/alembic.ini upgrade head
+#   docker compose ... exec api python -m atrium_hello_world.scripts.seed_host_bundle \
+#       http://localhost:5174/main.js
+
+services:
+  api:
+    # The atrium dev compose enables uvicorn --reload, which restarts
+    # the api when files in the bind-mounted source change. The host
+    # extension is bind-mounted at /host_app and added to PYTHONPATH so
+    # ATRIUM_HOST_MODULE=atrium_hello_world.bootstrap resolves.
+    environment:
+      ATRIUM_HOST_MODULE: atrium_hello_world.bootstrap
+      PYTHONPATH: /host_app/src:/app
+      HELLO_TICK_SECONDS: ${HELLO_TICK_SECONDS:-2}
+    volumes:
+      - ./examples/hello-world/backend:/host_app
+
+  worker:
+    environment:
+      ATRIUM_HOST_MODULE: atrium_hello_world.bootstrap
+      PYTHONPATH: /host_app/src:/app
+      HELLO_TICK_SECONDS: ${HELLO_TICK_SECONDS:-2}
+    volumes:
+      - ./examples/hello-world/backend:/host_app
+
+  # Sidecar nginx serving the prebuilt host bundle on its own origin.
+  # Atrium's SPA dynamic-imports it via system.host_bundle_url; in dev
+  # that has to be a different port from Vite (:5173) so Vite doesn't
+  # try to transform the imported module as source.
+  hello-bundle:
+    image: nginx:alpine
+    restart: unless-stopped
+    volumes:
+      - ./examples/hello-world/frontend/dist:/usr/share/nginx/html:ro
+      - ./examples/hello-world/host-bundle/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "127.0.0.1:5174:80"
+    networks:
+      - edge
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5

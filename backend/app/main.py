@@ -4,6 +4,7 @@
 import importlib
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -42,6 +43,7 @@ from app.services.captcha import CaptchaLoginMiddleware
 from app.services.maintenance import MaintenanceMiddleware
 from app.services.rate_limit import AuthRateLimitMiddleware
 from app.settings import get_settings
+from app.static import SPAStaticFiles
 
 
 class ImpersonationAuditMiddleware(BaseHTTPMiddleware):
@@ -170,6 +172,13 @@ def create_app() -> FastAPI:
             log.info(
                 "host.init_app.absent", module=host_module
             )
+
+    # Mount the built SPA last so it acts as the catch-all. Conditional
+    # on the directory existing so a dev tree without ``pnpm build``
+    # still boots — Vite's dev server on :5173 covers that workflow.
+    static_dir = Path(os.environ.get("ATRIUM_STATIC_DIR", "/opt/atrium/static"))
+    if static_dir.is_dir():
+        app.mount("/", SPAStaticFiles(directory=str(static_dir), html=True), name="spa")
 
     return app
 

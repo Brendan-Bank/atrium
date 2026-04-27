@@ -1,4 +1,4 @@
-# Published images and the host extension contract
+# Published image and the host extension contract
 
 Atrium is consumed as a **base Docker image**: a host project lives in its own
 repo, `FROM`s the published atrium image, and adds bespoke functionality
@@ -13,23 +13,29 @@ For a worked example that exercises every extension point, see
 
 ## Image catalogue
 
-| Image                              | Built from                                      | Roles               |
-|------------------------------------|-------------------------------------------------|---------------------|
-| `ghcr.io/<org>/atrium-backend`     | `backend/Dockerfile` `runtime` stage            | api **and** worker  |
-| `ghcr.io/<org>/atrium-web`         | `frontend/Dockerfile` `runtime` stage           | nginx + compiled SPA |
+| Image                       | Built from                | Roles                                                    |
+|-----------------------------|---------------------------|----------------------------------------------------------|
+| `ghcr.io/<org>/atrium`      | `Dockerfile` `runtime`    | api, worker, **and** the SPA static-file server (one image, one process per role) |
 
-The same `atrium-backend` image runs both the FastAPI ASGI app and the
-APScheduler worker — the host's compose overrides the CMD per service:
+The same image runs both the FastAPI ASGI app and the APScheduler worker —
+the host's compose overrides the CMD per service:
 
 - api: `uvicorn app.main:app --host 0.0.0.0 --port 8000` (image default)
 - worker: `python -m app.worker`
 
-`atrium-web` is nginx serving the prebuilt SPA bundle on `:8080`. It expects
-to be reverse-proxied by an edge that maps `/api/*` to the api container.
+The api process serves both atrium's HTTP routes and the prebuilt SPA from
+`/opt/atrium/static` via Starlette `StaticFiles` (with React-Router-style
+fallback to `index.html`). One origin, one process — no separate nginx /
+web container is needed.
+
+**Breaking change in v0.10**: prior releases published `atrium-backend` and
+`atrium-web` as two separate images. They have been merged into a single
+`atrium` image. The frontend nginx layer is gone; FastAPI serves the SPA
+itself. Update your compose / Dockerfiles per the patterns below.
 
 ## Tagging scheme
 
-Images are published **only** on a `vX.Y.Z` git tag. One tag push produces
+The image is published **only** on a `vX.Y.Z` git tag. One tag push produces
 these registry tags:
 
 - `X.Y.Z` — fully pinned
@@ -42,19 +48,34 @@ commits are not published — every published artifact corresponds to a
 deliberate version bump. Pin to `X.Y` in production for patch uptake; pin to
 `X.Y.Z` for fully deterministic deploys.
 
-Both images are built for `linux/amd64` and `linux/arm64`.
+The image is built for `linux/amd64` and `linux/arm64`.
 
 ## Using atrium as a base image
 
-A host project's `backend/Dockerfile`:
+A host project's `Dockerfile` (one image extending atrium with both backend
+and frontend host bits baked in):
 
 ```dockerfile
-ARG ATRIUM_BACKEND_IMAGE=ghcr.io/<org>/atrium-backend:1
-FROM ${ATRIUM_BACKEND_IMAGE}
+# Build the host SPA bundle.
+FROM node:25-alpine AS frontend-builder
+WORKDIR /app
+RUN npm install -g pnpm@10.33.1
+COPY frontend/package.json frontend/pnpm-lock.yaml* ./
+RUN pnpm install --frozen-lockfile
+COPY frontend/ ./
+RUN pnpm build
+
+# Extend atrium with the host backend package + the built bundle.
+ARG ATRIUM_IMAGE=ghcr.io/<org>/atrium:1
+FROM ${ATRIUM_IMAGE}
 
 USER root
 COPY ./host_app /opt/host_app
-RUN /opt/venv/bin/pip install --no-cache-dir /opt/host_app
+RUN /opt/venv/bin/python -m ensurepip --upgrade \
+ && /opt/venv/bin/python -m pip install --no-cache-dir /opt/host_app
+# Bundle lands at /opt/atrium/static/host/main.js — set
+# system.host_bundle_url=/host/main.js so atrium dynamic-imports it on boot.
+COPY --from=frontend-builder /app/dist /opt/atrium/static/host
 USER app
 ```
 
@@ -63,26 +84,22 @@ A host project's `docker-compose.yml`:
 ```yaml
 services:
   api:
-    image: ghcr.io/your-org/host-backend:1.0.0   # built from your Dockerfile above
+    image: ghcr.io/your-org/host-app:1.0.0   # built from your Dockerfile above
     environment:
       ATRIUM_HOST_MODULE: host_app.bootstrap
       DATABASE_URL: mysql+aiomysql://app:secret@mysql/app
       JWT_SECRET: ${JWT_SECRET}
+    ports:
+      - "8000:8000"
     depends_on: [mysql]
 
   worker:
-    image: ghcr.io/your-org/host-backend:1.0.0
+    image: ghcr.io/your-org/host-app:1.0.0
     command: ["python", "-m", "app.worker"]
     environment:
       ATRIUM_HOST_MODULE: host_app.bootstrap
       DATABASE_URL: mysql+aiomysql://app:secret@mysql/app
       JWT_SECRET: ${JWT_SECRET}
-
-  web:
-    image: ghcr.io/<org>/atrium-web:1
-    # The host's own static-file server (or a separate web service)
-    # serves the JS bundle the SPA dynamically imports — see
-    # "Frontend extension contract" below.
 
   mysql:
     image: mysql:8.0
@@ -90,6 +107,10 @@ services:
       MYSQL_DATABASE: app
       ...
 ```
+
+Add an edge proxy (Caddy, nginx, Cloudflare, your VM's existing terminator)
+in front of the api for TLS in production. The api speaks plain HTTP on
+:8000 by design — no built-in TLS.
 
 See [Operational notes](#operational-notes) for the full env-var split between
 build-time secrets, runtime env vars, and the `app_settings` table.
@@ -132,6 +153,9 @@ def init_worker(scheduler) -> None:
 - Atrium's routers, namespaces, and built-in handlers are all registered
   *before* the host module is imported, so `init_app` and `init_worker`
   can read atrium state safely.
+- `init_app` runs **before** the SPA static mount is attached, so a host
+  router registered at `/api/foo` (or anywhere else) wins over the static
+  catch-all.
 - ImportError at startup is intentionally loud — the operator opted in
   by setting the env var, so a typo or missing dep should fail startup
   rather than silently launch atrium without the host.
@@ -218,6 +242,10 @@ runtime by serving a JS bundle that atrium dynamically imports on boot.
 Bundle-load failure is non-fatal: the SPA still renders, just without the
 host extensions. The error is logged so a fat-fingered URL is findable in
 the browser console.
+
+The host bundle is served from atrium's own static mount — copy the built
+`dist/` into `/opt/atrium/static/host/` in your Dockerfile, and the api
+container serves it at `/host/...` (same origin as the SPA, so no CORS).
 
 ### The registries
 
@@ -367,15 +395,22 @@ once published.
 
 **Health endpoints**: the api image exposes `/healthz`, `/readyz`, and
 `/health`. The worker has no HTTP port — disable healthchecks on it in
-compose (the shared backend image's `HEALTHCHECK` curls /healthz, which
-will always fail on the worker).
+compose (the shared image's `HEALTHCHECK` curls /healthz, which will
+always fail on the worker).
+
+**Static directory override**: `ATRIUM_STATIC_DIR` (default
+`/opt/atrium/static`) controls where FastAPI mounts the SPA from. Useful
+if you want to bind-mount a different bundle without rebuilding the image.
+The mount is conditional on the directory existing, so a dev tree without
+a built bundle still boots — Vite's dev server on `:5173` covers that
+workflow.
 
 **Configuration split** (full details in [`CLAUDE.md`](../CLAUDE.md) under
 *App configuration*):
 
-- **Build-time**: nothing in the host image needs build args beyond
-  `ATRIUM_BACKEND_IMAGE`. Frontend builds bake `VITE_API_BASE_URL` etc.
-  at build time.
+- **Build-time**: the host's frontend builds bake `VITE_API_BASE_URL` etc.
+  at build time. The atrium image is published with `VITE_API_BASE_URL=""`
+  so the SPA calls relative paths and lands on the same origin.
 - **Env vars** (`.env` consumed by compose's `env_file`): secrets,
   infrastructure, build-time identity. JWT secret, DSN, WebAuthn RP ID,
   mail backend.
@@ -392,27 +427,25 @@ The fastest way to see the contract working end to end:
 
 ```bash
 git clone https://github.com/<org>/atrium
-cd atrium
+cd atrium/examples/hello-world
 
-# Build the host frontend bundle
-cd examples/hello-world/frontend && pnpm install && pnpm build && cd ../../..
-
-# Bring up the dev stack with the example overlay
-docker compose -f docker-compose.yml -f docker-compose.dev.yml \
-               -f examples/hello-world/compose.yaml up -d
+# One self-contained compose file pulls atrium from GHCR, builds the
+# host extension on top, and brings everything up.
+cp .env.example .env  # fill in JWT_SECRET, DB creds, etc.
+docker compose up -d
 
 # Run atrium + host migrations
-docker compose ... exec api alembic upgrade head
-docker compose ... exec api alembic -c /host_app/alembic.ini upgrade head
+docker compose exec api alembic upgrade head
+docker compose exec api alembic -c /opt/host_app/alembic.ini upgrade head
 
 # Seed an admin and the host_bundle_url
-docker compose ... exec api python -m app.scripts.seed_admin \
+docker compose exec api python -m app.scripts.seed_admin \
     --email admin@example.com --password 'secret' --full-name 'Admin' --super-admin
-docker compose ... exec api python -m atrium_hello_world.scripts.seed_host_bundle /host/main.js
+docker compose exec api python -m atrium_hello_world.scripts.seed_host_bundle /host/main.js
 ```
 
-Open the app, log in, and the Hello World card appears on the home page.
-Flip the toggle and the counter ticks every 30 seconds.
+Open `http://localhost:8000`, log in, and the Hello World card appears on
+the home page. Flip the toggle and the counter ticks every 30 seconds.
 
-For the automated test loop, `make smoke-hello-dev` does all of the above
-plus runs the Playwright spec end to end.
+For the automated test loop, `make smoke-hello` runs all of the above plus
+the Playwright spec end to end.

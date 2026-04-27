@@ -6,24 +6,25 @@
         shell-api shell-db test test-backend test-frontend lint format \
         clean clean-atrium prod-build prod-up prod-down \
         smoke smoke-extended smoke-dev smoke-up smoke-down \
-        smoke-hello smoke-hello-dev smoke-hello-down \
+        smoke-hello smoke-hello-dev smoke-hello-down smoke-hello-ghcr \
+        dev-bootstrap-hello-ghcr dev-bootstrap-hello-ghcr-down hello-smoke-env \
+        smoke-hello-build-bundle-dev \
         web-install web-reinstall reset-test-state
 
 COMPOSE_DEV := docker compose -f docker-compose.yml -f docker-compose.dev.yml
 COMPOSE_E2E := docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.e2e.yml
 COMPOSE_PROD := docker compose -f docker-compose.yml
 
-# Hello World example: dev = dev stack + example overlay + smoke-tick
-# overlay; e2e = e2e stack + example overlay + smoke-tick + e2e overlay.
+# Hello World example:
+#   * dev — atrium dev stack + example dev overlay (bind-mounted host
+#     code, sidecar nginx for the host bundle, fast tick).
+#   * prod — example's self-contained compose.yaml (atrium-from-GHCR +
+#     host extension built locally on top, single image, plain HTTP
+#     on :8000). Used by both ``smoke-hello`` and ``smoke-hello-ghcr``;
+#     the difference is which atrium image they resolve.
 COMPOSE_HELLO_DEV := $(COMPOSE_DEV) \
-    -f examples/hello-world/compose.yaml \
-    -f examples/hello-world/compose.dev.yaml
-COMPOSE_HELLO_E2E := $(COMPOSE_E2E) \
-    -f examples/hello-world/compose.yaml \
-    -f examples/hello-world/compose.dev.yaml \
-    -f examples/hello-world/compose.e2e.yaml
-COMPOSE_HELLO_GHCR := $(COMPOSE_HELLO_E2E) \
-    -f examples/hello-world/compose.ghcr.yaml
+    -f examples/hello-world/dev/compose.dev.yaml
+COMPOSE_HELLO_PROD := docker compose -f examples/hello-world/compose.yaml
 
 help:
 	@echo "Atrium — common tasks"
@@ -296,7 +297,8 @@ smoke-down:
 	$(COMPOSE_E2E) down -v
 
 smoke: smoke-up
-	cd frontend && E2E_ADMIN_EMAIL=$(SMOKE_EMAIL) E2E_ADMIN_PASSWORD=$(SMOKE_PASSWORD) \
+	cd frontend && E2E_BASE_URL=http://localhost:8000 \
+		E2E_ADMIN_EMAIL=$(SMOKE_EMAIL) E2E_ADMIN_PASSWORD=$(SMOKE_PASSWORD) \
 		E2E_ADMIN_TOTP_SECRET=$(SMOKE_TOTP_SECRET) \
 		E2E_EMAIL_OTP_EMAIL=$(SMOKE_EMAIL_OTP_EMAIL) \
 		E2E_EMAIL_OTP_PASSWORD=$(SMOKE_EMAIL_OTP_PASSWORD) \
@@ -307,7 +309,8 @@ smoke: smoke-up
 # frontend changes; the PR-gating ``make smoke`` only runs the four
 # golden-path specs.
 smoke-extended: smoke-up
-	cd frontend && E2E_ADMIN_EMAIL=$(SMOKE_EMAIL) E2E_ADMIN_PASSWORD=$(SMOKE_PASSWORD) \
+	cd frontend && E2E_BASE_URL=http://localhost:8000 \
+		E2E_ADMIN_EMAIL=$(SMOKE_EMAIL) E2E_ADMIN_PASSWORD=$(SMOKE_PASSWORD) \
 		E2E_ADMIN_TOTP_SECRET=$(SMOKE_TOTP_SECRET) \
 		E2E_EMAIL_OTP_EMAIL=$(SMOKE_EMAIL_OTP_EMAIL) \
 		E2E_EMAIL_OTP_PASSWORD=$(SMOKE_EMAIL_OTP_PASSWORD) \
@@ -380,16 +383,16 @@ smoke-dev:
 HELLO_BUNDLE_URL_DEV := http://localhost:5174/main.js
 HELLO_BUNDLE_URL_E2E := /host/main.js
 
-# Both dev and e2e atrium stacks bake the SPA with
-# VITE_API_BASE_URL=http://localhost:8000 (no /api proxy on either
-# variant's web container). Keep the host bundle aligned so its
-# /hello/* fetches reach the api on :8000 and not the SPA-fallback
-# index.html on :5173.
-smoke-hello-build-bundle:
+# The dev variant bind-mounts the host backend and serves the prebuilt
+# host bundle from a sidecar nginx on :5174 (Vite dev server can't
+# serve a prebuilt module cleanly — it tries to transform it as
+# source). The host-bundle URL must point at that sidecar so the SPA's
+# dynamic import resolves.
+smoke-hello-build-bundle-dev:
 	cd examples/hello-world/frontend && pnpm install --frozen-lockfile=false --silent && \
 		VITE_API_BASE_URL=http://localhost:8000 pnpm build
 
-smoke-hello-dev: smoke-hello-build-bundle
+smoke-hello-dev: smoke-hello-build-bundle-dev
 	$(COMPOSE_HELLO_DEV) up -d --build api worker web mysql proxy hello-bundle
 	@for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do \
 		curl -fsS http://localhost:8000/readyz > /dev/null && break; \
@@ -411,50 +414,99 @@ smoke-hello-dev: smoke-hello-build-bundle
 		E2E_ADMIN_EMAIL=$(SMOKE_EMAIL) \
 		E2E_ADMIN_PASSWORD=$(SMOKE_PASSWORD) \
 		E2E_ADMIN_TOTP_SECRET=$(SMOKE_TOTP_SECRET) \
-		E2E_COMPOSE_FILES='-f docker-compose.yml -f docker-compose.dev.yml -f examples/hello-world/compose.yaml -f examples/hello-world/compose.dev.yaml' \
+		E2E_COMPOSE_FILES='-f docker-compose.yml -f docker-compose.dev.yml -f examples/hello-world/dev/compose.dev.yaml' \
 		pnpm exec playwright test
 
-smoke-hello: smoke-hello-build-bundle
-	# Build the atrium-backend runtime image first so the example's
-	# Dockerfile (FROM atrium-backend:latest) has something to extend.
-	docker build -t atrium-backend:latest --target runtime backend
-	# Build the host backend image (atrium-backend + pip install host pkg).
-	docker build -t atrium-hello-backend:latest \
-		--build-arg ATRIUM_BACKEND_IMAGE=atrium-backend:latest \
-		-f examples/hello-world/backend/Dockerfile .
-	$(COMPOSE_HELLO_E2E) up -d --build
+# The prod variant builds the unified atrium-hello-world image (one
+# image, atrium + host backend pkg + host bundle baked in), runs it
+# from the example's self-contained compose.yaml on plain HTTP :8000,
+# and points Playwright at the same origin (api serves both API and
+# SPA). Used by both ``smoke-hello`` (atrium built locally) and
+# ``smoke-hello-ghcr`` (atrium pulled from GHCR).
+# Write to .env (not .smoke.env) so compose auto-loads it from the
+# project directory for every subsequent `docker compose ... exec`
+# call — `--env-file` only applies to the single command it's passed
+# to, so reaching for it forces every later call to thread the same
+# flag through. Auto-loading is simpler and matches what a developer
+# would have on disk during the demo. Removed by smoke-hello-down.
+HELLO_SMOKE_ENV := examples/hello-world/.env
+
+# Write a smoke-specific env file so the example's compose.yaml has
+# deterministic secrets without touching whatever the developer has in
+# .env. Idempotent; safe to call between runs.
+#
+# Wrapped in a single ``{ ...; } > $@`` so the whole block runs in one
+# shell invocation — Make recipes execute one shell per line by default,
+# and a heredoc opened on line 1 closes immediately, leaving the body
+# lines to be executed as commands (which then fails on values
+# containing spaces like "Atrium Hello World").
+hello-smoke-env:
+	@{ \
+	  echo 'ENVIRONMENT=dev'; \
+	  echo 'APP_TIMEZONE=UTC'; \
+	  echo 'APP_SECRET_KEY=smoke-secret-do-not-use-in-prod'; \
+	  echo 'APP_BASE_URL=http://localhost:8000'; \
+	  echo 'MYSQL_ROOT_PASSWORD=smoke-root-pw'; \
+	  echo 'MYSQL_DATABASE=atrium'; \
+	  echo 'MYSQL_USER=atrium'; \
+	  echo 'MYSQL_PASSWORD=smoke-pw'; \
+	  echo 'DATABASE_URL=mysql+aiomysql://atrium:smoke-pw@mysql:3306/atrium'; \
+	  echo 'JWT_SECRET=smoke-jwt-secret-do-not-use-in-prod'; \
+	  echo 'JWT_ACCESS_TOKEN_EXPIRE_MINUTES=10080'; \
+	  echo 'WEBAUTHN_RP_ID=localhost'; \
+	  echo 'WEBAUTHN_RP_NAME=Atrium Hello World'; \
+	  echo 'WEBAUTHN_ORIGIN=http://localhost:8000'; \
+	  echo 'MAIL_BACKEND=console'; \
+	  echo 'MAIL_FROM=no-reply@example.com'; \
+	  echo 'HELLO_TICK_SECONDS=2'; \
+	} > $(HELLO_SMOKE_ENV)
+
+smoke-hello: hello-smoke-env
+	# Build the atrium runtime image locally so the example Dockerfile
+	# (FROM atrium-hello-world:source) has something to extend without
+	# pulling from GHCR.
+	docker build -t atrium-local:source --target runtime .
+	ATRIUM_IMAGE=atrium-local:source $(COMPOSE_HELLO_PROD) up -d --build
 	@for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do \
 		curl -fsS http://localhost:8000/readyz > /dev/null && break; \
 		sleep 2; \
 	done
-	$(COMPOSE_HELLO_E2E) exec -T api alembic upgrade head
-	$(COMPOSE_HELLO_E2E) exec -T api alembic -c /opt/host_app/alembic.ini upgrade head
-	$(COMPOSE_HELLO_E2E) exec -T api python -m app.scripts.seed_admin \
+	$(COMPOSE_HELLO_PROD) exec -T api alembic upgrade head
+	$(COMPOSE_HELLO_PROD) exec -T api alembic -c /opt/host_app/alembic.ini upgrade head
+	$(COMPOSE_HELLO_PROD) exec -T api python -m app.scripts.seed_admin \
 		--email "$(SMOKE_EMAIL)" --password "$(SMOKE_PASSWORD)" --full-name 'Smoke Admin' \
 		--super-admin --totp-secret "$(SMOKE_TOTP_SECRET)"
-	$(COMPOSE_HELLO_E2E) exec -T api python -m atrium_hello_world.scripts.seed_host_bundle "$(HELLO_BUNDLE_URL_E2E)"
+	$(COMPOSE_HELLO_PROD) exec -T api python -m atrium_hello_world.scripts.seed_host_bundle "$(HELLO_BUNDLE_URL_E2E)"
+	# pnpm install + chromium are needed because the host bundle is now
+	# baked inside the Dockerfile; the frontend dir's dependencies are
+	# only used by Playwright. Idempotent on warm caches.
+	cd examples/hello-world/frontend && pnpm install --silent
+	cd examples/hello-world/frontend && pnpm exec playwright install chromium 2>/dev/null \
+		|| pnpm exec playwright install chromium
 	cd examples/hello-world/frontend && \
+		E2E_BASE_URL=http://localhost:8000 \
 		E2E_ADMIN_EMAIL=$(SMOKE_EMAIL) \
 		E2E_ADMIN_PASSWORD=$(SMOKE_PASSWORD) \
 		E2E_ADMIN_TOTP_SECRET=$(SMOKE_TOTP_SECRET) \
-		E2E_COMPOSE_FILES='-f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.e2e.yml -f examples/hello-world/compose.yaml -f examples/hello-world/compose.dev.yaml -f examples/hello-world/compose.e2e.yaml' \
+		E2E_COMPOSE_FILES='-f compose.yaml' \
+		E2E_COMPOSE_CWD='..' \
 		CI=1 pnpm exec playwright test
 
 smoke-hello-down:
-	$(COMPOSE_HELLO_E2E) down -v --remove-orphans
+	$(COMPOSE_HELLO_PROD) down -v --remove-orphans
 	$(COMPOSE_HELLO_DEV) down -v --remove-orphans
+	rm -f $(HELLO_SMOKE_ENV)
 
 # --- Hello World against published GHCR images ---
-# Brings up the example with api/worker/web all extending the
-# published ghcr.io/brendan-bank/atrium-{backend,web} images via the
-# overlays in examples/hello-world/{backend,frontend}/Dockerfile, so
-# the run is a faithful test of the published-image extension model
-# rather than locally-built atrium binaries with bind mounts.
-#
-# Pulls dev creds from the same 1Password item dev-bootstrap uses
-# (vault='$(OP_VAULT)', item='$(OP_ITEM)') so you can click around
-# at http://localhost:5173 with your normal admin login.
-dev-bootstrap-hello-ghcr:
+# Same self-contained example compose.yaml as ``smoke-hello`` and
+# ``dev-bootstrap-hello`` — the only difference is that ATRIUM_IMAGE
+# points at the published ghcr.io/brendan-bank/atrium tag instead of a
+# locally-built one. Faithful test of the published-image extension
+# model.
+ATRIUM_GHCR_VERSION ?= latest
+ATRIUM_GHCR_IMAGE := ghcr.io/brendan-bank/atrium:$(ATRIUM_GHCR_VERSION)
+
+dev-bootstrap-hello-ghcr: hello-smoke-env
 	@command -v op >/dev/null 2>&1 || { \
 		echo "1Password CLI not found. Install with: brew install 1password-cli"; \
 		exit 1; \
@@ -463,23 +515,18 @@ dev-bootstrap-hello-ghcr:
 		echo "1Password CLI is not signed in. Run: eval \$$(op signin)"; \
 		exit 1; \
 	}
-	@if [ ! -f .env ]; then \
-		echo "creating .env from .env.example"; \
-		cp .env.example .env; \
-	fi
 	@gh auth token | docker login ghcr.io -u brendan-bank --password-stdin >/dev/null 2>&1 || { \
 		echo "docker login to ghcr.io failed (gh auth required for private images)"; exit 1; \
 	}
-	docker pull ghcr.io/brendan-bank/atrium-backend:0.9.1
-	docker pull ghcr.io/brendan-bank/atrium-web:0.9.1
-	$(COMPOSE_HELLO_GHCR) up -d --build
+	docker pull $(ATRIUM_GHCR_IMAGE)
+	ATRIUM_IMAGE=$(ATRIUM_GHCR_IMAGE) $(COMPOSE_HELLO_PROD) up -d --build
 	@echo "waiting for api /readyz..."
 	@for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do \
 		curl -fsS http://localhost:8000/readyz > /dev/null && break; \
 		sleep 2; \
 	done
-	$(COMPOSE_HELLO_GHCR) exec -T api alembic upgrade head
-	$(COMPOSE_HELLO_GHCR) exec -T api alembic -c /opt/host_app/alembic.ini upgrade head
+	$(COMPOSE_HELLO_PROD) exec -T api alembic upgrade head
+	$(COMPOSE_HELLO_PROD) exec -T api alembic -c /opt/host_app/alembic.ini upgrade head
 	@set -eu; \
 	echo "fetching admin credentials from 1Password (vault='$(OP_VAULT)', item='$(OP_ITEM)')..."; \
 	EMAIL=$$(op item get "$(OP_ITEM)" --vault "$(OP_VAULT)" --fields label=username); \
@@ -489,57 +536,49 @@ dev-bootstrap-hello-ghcr:
 	if [ -z "$$EMAIL" ] || [ -z "$$PASSWORD" ] || [ -z "$$TOTP_SECRET" ]; then \
 		echo "missing field in 1Password item '$(OP_ITEM)' (need username + password + OTP)"; exit 1; \
 	fi; \
-	$(COMPOSE_HELLO_GHCR) exec -T api python -m app.scripts.seed_admin \
+	$(COMPOSE_HELLO_PROD) exec -T api python -m app.scripts.seed_admin \
 		--email "$$EMAIL" \
 		--password "$$PASSWORD" \
 		--full-name "$(DEV_ADMIN_NAME)" \
 		--super-admin --totp-secret "$$TOTP_SECRET"; \
-	$(COMPOSE_HELLO_GHCR) exec -T api python -m atrium_hello_world.scripts.seed_host_bundle "$(HELLO_BUNDLE_URL_E2E)"; \
+	$(COMPOSE_HELLO_PROD) exec -T api python -m atrium_hello_world.scripts.seed_host_bundle "$(HELLO_BUNDLE_URL_E2E)"; \
 	echo ""; \
 	echo "hello-world (GHCR images) ready:"; \
 	echo "  email:       $$EMAIL"; \
 	echo "  password:    (from 1Password '$(OP_ITEM)')"; \
 	echo "  totp secret: (from 1Password '$(OP_ITEM)' -> Authenticator)"; \
-	echo "  url:         https://localhost:9443"; \
-	echo ""; \
-	echo "Note: the GHCR atrium-web is published with VITE_API_BASE_URL=/api,"; \
-	echo "so it must be reached via the prod proxy on :9443 (where /api"; \
-	echo "routes to the api service). The :5173 dev port serves the SPA"; \
-	echo "directly with no /api router and won't work for this stack."; \
-	echo "Browsers will warn about the self-signed cert — click through."
+	echo "  url:         http://localhost:8000"
 
 dev-bootstrap-hello-ghcr-down:
-	$(COMPOSE_HELLO_GHCR) down -v --remove-orphans
+	$(COMPOSE_HELLO_PROD) down -v --remove-orphans
 
-# CI-style end-to-end smoke against the published GHCR images. Same
-# shape as smoke-hello but uses examples/hello-world/compose.ghcr.yaml,
-# seeds with the fixed smoke creds, and points Playwright at the
-# prod proxy on :9443 (which is where the GHCR-built SPA expects /api
-# to be reachable).
-smoke-hello-ghcr:
+smoke-hello-ghcr: hello-smoke-env
 	@gh auth token | docker login ghcr.io -u brendan-bank --password-stdin >/dev/null 2>&1 || { \
 		echo "docker login to ghcr.io failed (gh auth required for private images)"; exit 1; \
 	}
-	docker pull ghcr.io/brendan-bank/atrium-backend:0.9.1
-	docker pull ghcr.io/brendan-bank/atrium-web:0.9.1
-	$(COMPOSE_HELLO_GHCR) up -d --build
+	docker pull $(ATRIUM_GHCR_IMAGE)
+	ATRIUM_IMAGE=$(ATRIUM_GHCR_IMAGE) $(COMPOSE_HELLO_PROD) up -d --build
 	@for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do \
 		curl -fsS http://localhost:8000/readyz > /dev/null && break; \
 		sleep 2; \
 	done
-	$(COMPOSE_HELLO_GHCR) exec -T api alembic upgrade head
-	$(COMPOSE_HELLO_GHCR) exec -T api alembic -c /opt/host_app/alembic.ini upgrade head
-	$(COMPOSE_HELLO_GHCR) exec -T api python -m app.scripts.seed_admin \
+	$(COMPOSE_HELLO_PROD) exec -T api alembic upgrade head
+	$(COMPOSE_HELLO_PROD) exec -T api alembic -c /opt/host_app/alembic.ini upgrade head
+	$(COMPOSE_HELLO_PROD) exec -T api python -m app.scripts.seed_admin \
 		--email "$(SMOKE_EMAIL)" --password "$(SMOKE_PASSWORD)" --full-name 'Smoke Admin' \
 		--super-admin --totp-secret "$(SMOKE_TOTP_SECRET)"
-	$(COMPOSE_HELLO_GHCR) exec -T api python -m atrium_hello_world.scripts.seed_host_bundle "$(HELLO_BUNDLE_URL_E2E)"
+	$(COMPOSE_HELLO_PROD) exec -T api python -m atrium_hello_world.scripts.seed_host_bundle "$(HELLO_BUNDLE_URL_E2E)"
+	cd examples/hello-world/frontend && pnpm install --silent
+	cd examples/hello-world/frontend && pnpm exec playwright install chromium 2>/dev/null \
+		|| pnpm exec playwright install chromium
 	cd examples/hello-world/frontend && \
+		E2E_BASE_URL=http://localhost:8000 \
+		E2E_API_URL=http://localhost:8000 \
 		E2E_ADMIN_EMAIL=$(SMOKE_EMAIL) \
 		E2E_ADMIN_PASSWORD=$(SMOKE_PASSWORD) \
 		E2E_ADMIN_TOTP_SECRET=$(SMOKE_TOTP_SECRET) \
-		E2E_BASE_URL=https://localhost:9443 \
-		E2E_API_URL=https://localhost:9443/api \
-		E2E_COMPOSE_FILES='-f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.e2e.yml -f examples/hello-world/compose.yaml -f examples/hello-world/compose.dev.yaml -f examples/hello-world/compose.e2e.yaml -f examples/hello-world/compose.ghcr.yaml' \
+		E2E_COMPOSE_FILES='-f compose.yaml' \
+		E2E_COMPOSE_CWD='..' \
 		CI=1 pnpm exec playwright test
 
 # --- Prod ---

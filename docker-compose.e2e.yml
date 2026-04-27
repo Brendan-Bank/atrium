@@ -3,25 +3,33 @@
 
 # CI e2e override. Pairs with docker-compose.yml + docker-compose.dev.yml.
 #
-# The dev override runs the frontend as a vite dev server with a
-# bind-mounted source tree and a named node_modules volume. That setup
-# is handy locally but fragile on ephemeral CI runners (volume
-# re-init + pnpm virtual store races cause missing-file errors from
-# postcss). For e2e we want something closer to production anyway, so
-# here we swap the web service to the prod nginx target with the API
-# URL baked in for the CI host.
+# Reverts api/worker back to the prod ``runtime`` target (the dev
+# override switched them to ``dev`` for hot-reload). Runtime bakes the
+# built SPA into /opt/atrium/static so the api container serves it
+# from the same process — there is no separate web container in this
+# topology, so Playwright points at http://localhost:8000 for both
+# the SPA and the API surface.
+
 services:
-  web:
+  api:
     build:
-      context: ./frontend
       target: runtime
-      args:
-        VITE_API_BASE_URL: http://localhost:8000
-        VITE_DEFAULT_LANGUAGE: en
-    # Drop the dev-mode command; nginx-unprivileged runs nginx by default.
-    command: null
-    # No bind mount, no node_modules volume — static dist only.
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    # No bind mount — we want the runtime image's baked-in source +
+    # /opt/atrium/static, not the host tree.
     volumes: !override []
-    ports: !override
-      - "127.0.0.1:5173:8080"
+    environment: !override
+      APP_BASE_URL: http://localhost:8000
+
+  worker:
+    build:
+      target: runtime
+    command: !override ["python", "-m", "app.worker"]
+    volumes: !override []
     environment: !override {}
+
+  # The dev overlay's web service (Vite dev server) is irrelevant here
+  # — the api container serves the SPA in this topology. Profile it
+  # out so ``up -d`` doesn't start it.
+  web:
+    profiles: ["never"]
