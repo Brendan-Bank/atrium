@@ -4,7 +4,7 @@
 .PHONY: help up down logs ps build rebuild migrate migration \
         seed-admin seed-super-admin dev-bootstrap \
         shell-api shell-db test test-backend test-frontend lint format \
-        clean prod-build prod-up prod-down \
+        clean clean-atrium prod-build prod-up prod-down \
         smoke smoke-extended smoke-dev smoke-up smoke-down \
         smoke-hello smoke-hello-dev smoke-hello-down \
         web-install web-reinstall reset-test-state
@@ -48,6 +48,8 @@ help:
 	@echo "                          override with OP_VAULT=… OP_ITEM=…). Copies"
 	@echo "                          .env.example -> .env when .env is missing."
 	@echo "  make reset-test-state   Truncate runtime tables (keeps users + auth + templates)"
+	@echo "  make clean-atrium       Force-remove every atrium_* container, volume, and"
+	@echo "                          network across ALL workspaces (not just this one)"
 	@echo ""
 	@echo "  make shell-api          Shell into the api container"
 	@echo "  make shell-db           MySQL shell"
@@ -239,6 +241,30 @@ format:
 clean:
 	$(COMPOSE_DEV) down -v --remove-orphans
 	rm -rf backend/.pytest_cache backend/.ruff_cache frontend/node_modules frontend/dist
+
+# Cross-workspace cleanup. The compose files explicitly name volumes
+# (atrium_mysql_data, atrium_proxy_certs, atrium_frontend_node_modules)
+# and networks (atrium_edge, atrium_internal) with an atrium_ prefix,
+# so they're shared across every Conductor workspace. `make clean`
+# only detaches the current compose project — this target nukes the
+# shared resources outright, including any container from any
+# workspace still attached to them.
+clean-atrium:
+	@echo "force-removing containers attached to atrium_* networks/volumes..."
+	@CIDS=$$( { \
+	    docker ps -aq --filter "network=atrium_edge"; \
+	    docker ps -aq --filter "network=atrium_internal"; \
+	    docker ps -aq --filter "volume=atrium_mysql_data"; \
+	    docker ps -aq --filter "volume=atrium_proxy_certs"; \
+	    docker ps -aq --filter "volume=atrium_frontend_node_modules"; \
+	  } | sort -u); \
+	if [ -n "$$CIDS" ]; then docker rm -f $$CIDS; else echo "  (none)"; fi
+	@echo "removing atrium_* volumes..."
+	@VOLS=$$(docker volume ls -q --filter "name=^atrium_"); \
+	if [ -n "$$VOLS" ]; then docker volume rm $$VOLS; else echo "  (none)"; fi
+	@echo "removing atrium_* networks..."
+	@NETS=$$(docker network ls --format '{{.Name}}' --filter "name=^atrium_"); \
+	if [ -n "$$NETS" ]; then docker network rm $$NETS; else echo "  (none)"; fi
 
 # --- Smoke (mirrors CI) ---
 SMOKE_EMAIL := admin@example.com
