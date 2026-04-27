@@ -1,69 +1,116 @@
 # Copyright (c) 2026 Brendan Bank
 # SPDX-License-Identifier: BSD-2-Clause
 
-# Standalone Hello World demo overlay.
+# Hello World example — self-contained prod compose.
 #
-# Usage:
-#   cd examples/hello-world/frontend && pnpm install && pnpm build
-#   docker compose -f docker-compose.yml \
-#                  -f docker-compose.dev.yml \
-#                  -f examples/hello-world/compose.yaml up -d
-#   docker compose -f docker-compose.yml \
-#                  -f docker-compose.dev.yml \
-#                  -f examples/hello-world/compose.yaml \
-#                  exec api alembic -c /host_app/alembic.ini upgrade head
-#   # set system.host_bundle_url so the SPA loads the bundle:
-#   docker compose ... exec api python -m atrium_hello_world.scripts.seed_host_bundle /host/main.js
+# Pulls atrium from GHCR, builds the host extension on top, brings up
+# api + worker + mysql. No proxy, no TLS — atrium speaks plain HTTP on
+# :8000 by design. Put your own TLS terminator (Caddy, nginx, the
+# load balancer at your edge) in front for production.
 #
-# After that, the home page shows the Hello World card; flipping the
-# switch starts the 30s tick (HELLO_TICK_SECONDS unset → default).
+# Usage (from this directory):
+#   cp .env.example .env  # fill in JWT_SECRET, DB password
+#   docker compose up -d
+#   docker compose exec api alembic upgrade head
+#   docker compose exec api alembic -c /opt/host_app/alembic.ini upgrade head
+#   docker compose exec api python -m app.scripts.seed_admin \
+#       --email admin@example.com --password 'secret' \
+#       --full-name 'Admin' --super-admin
+#   docker compose exec api python -m atrium_hello_world.scripts.seed_host_bundle /host/main.js
+#   open http://localhost:8000
+#
+# For dev (hot-reload, vite, smoke variants), see ./dev/.
+#
+# Environment variables are pulled from the compose project's .env via
+# ${VAR} interpolation (compose auto-loads .env from this directory)
+# or from --env-file on the command line. We avoid the ``env_file:``
+# service directive so that --env-file alone is enough for both
+# variable substitution and container env — no real .env needs to
+# exist on disk for smoke / CI use.
 
 services:
   api:
-    # Drop --reload that the dev compose set for atrium's hot-reload;
-    # uvicorn's WatchFiles backend was restarting the api mid-test
-    # (likely seeing __pycache__ / .pyc writes inside the bind-mounted
-    # /app). The example doesn't need hot-reload — it's the host
-    # package that changes during dev, not atrium's source — so a
-    # plain uvicorn keeps tests stable. Explicitly re-add --reload
-    # below if you want hot-reload while editing atrium itself.
-    command:
-      ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    build:
+      # Repo root, so the Dockerfile's COPY can reach examples/hello-world/
+      # backend/ and frontend/ in one tree.
+      context: ../..
+      dockerfile: examples/hello-world/Dockerfile
+      args:
+        ATRIUM_IMAGE: ${ATRIUM_IMAGE:-ghcr.io/brendan-bank/atrium:latest}
+    image: atrium-hello-world:latest
+    pull_policy: never
+    restart: unless-stopped
     environment:
+      ENVIRONMENT: ${ENVIRONMENT:-dev}
+      APP_TIMEZONE: ${APP_TIMEZONE:-UTC}
+      APP_SECRET_KEY: ${APP_SECRET_KEY}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8000}
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-10080}
+      WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-localhost}
+      WEBAUTHN_RP_NAME: ${WEBAUTHN_RP_NAME:-Atrium Hello World}
+      WEBAUTHN_ORIGIN: ${WEBAUTHN_ORIGIN:-http://localhost:8000}
+      MAIL_BACKEND: ${MAIL_BACKEND:-console}
+      MAIL_FROM: ${MAIL_FROM:-no-reply@example.com}
       ATRIUM_HOST_MODULE: atrium_hello_world.bootstrap
-      PYTHONPATH: /host_app/src:/app
-    volumes:
-      # Mount the host package so atrium's importlib can reach it via
-      # ATRIUM_HOST_MODULE. The dev base image already binds ./backend
-      # at /app; this stacks the host package alongside.
-      - ./examples/hello-world/backend:/host_app
+      HELLO_TICK_SECONDS: ${HELLO_TICK_SECONDS:-30}
+      # Host alembic runs with cwd=/opt/host_app (via -c /opt/host_app/alembic.ini)
+      # and its env.py imports from atrium's `app` package. The runtime
+      # image installs atrium's source at /app, so put it on PYTHONPATH
+      # so the import resolves no matter where the caller's cwd is.
+      PYTHONPATH: /app
+    ports:
+      - "8000:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
 
   worker:
-    environment:
-      ATRIUM_HOST_MODULE: atrium_hello_world.bootstrap
-      PYTHONPATH: /host_app/src:/app
-    volumes:
-      - ./examples/hello-world/backend:/host_app
-
-  # Sidecar nginx serving the host bundle on its own origin.
-  # We can't piggy-back on atrium's web container (Vite's dev server
-  # rewrites dynamic-import requests with ``?import`` and tries to
-  # transform pre-built bundles as source, which fails). A separate
-  # static-file server on its own port sidesteps the issue and the
-  # same pattern works in prod (the e2e overlay swaps the bind mount
-  # but keeps the same service shape).
-  hello-bundle:
-    image: nginx:alpine
+    image: atrium-hello-world:latest
+    pull_policy: never
     restart: unless-stopped
-    volumes:
-      - ./examples/hello-world/frontend/dist:/usr/share/nginx/html:ro
-      - ./examples/hello-world/host-bundle/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-    ports:
-      - "127.0.0.1:5174:80"
-    networks:
-      - edge
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-dev}
+      APP_TIMEZONE: ${APP_TIMEZONE:-UTC}
+      APP_SECRET_KEY: ${APP_SECRET_KEY}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8000}
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      MAIL_BACKEND: ${MAIL_BACKEND:-console}
+      MAIL_FROM: ${MAIL_FROM:-no-reply@example.com}
+      ATRIUM_HOST_MODULE: atrium_hello_world.bootstrap
+      HELLO_TICK_SECONDS: ${HELLO_TICK_SECONDS:-30}
+      PYTHONPATH: /app
+    command: ["python", "-m", "app.worker"]
+    depends_on:
+      mysql:
+        condition: service_healthy
+      # The api service builds the shared atrium-hello-world image —
+      # this dependency makes ``up -d`` build it once before the worker
+      # tries to pull-or-fail.
+      api:
+        condition: service_started
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost/healthz"]
+      disable: true
+
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --default-time-zone=+00:00
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
       interval: 10s
-      timeout: 3s
-      retries: 5
+      timeout: 5s
+      retries: 10
+
+volumes:
+  mysql_data:
+    name: hello_world_mysql_data

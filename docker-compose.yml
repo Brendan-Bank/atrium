@@ -6,9 +6,11 @@
 # Services:
 #   proxy    — nginx w/ self-signed cert, terminates TLS on :443
 #              (edge Caddy on the firewall reverse-proxies to us)
-#   api      — FastAPI (uvicorn)
-#   worker   — APScheduler + email sender
-#   web      — built frontend served by nginx (internal)
+#   api      — FastAPI (uvicorn). Serves both /api routes and the
+#              built SPA via Starlette StaticFiles at /. Same image
+#              shared with the worker.
+#   worker   — APScheduler + email sender. Same image as api,
+#              different command.
 #   mysql    — MySQL 8 (internal network only)
 #
 # Outbound SMTP relays via the host's Postfix, reached at
@@ -30,13 +32,13 @@ services:
       - "9443:443"
     depends_on:
       - api
-      - web
     networks:
       - edge
 
   api:
     build:
-      context: ./backend
+      context: .
+      dockerfile: Dockerfile
       target: runtime
     restart: unless-stopped
     env_file: .env
@@ -54,7 +56,8 @@ services:
 
   worker:
     build:
-      context: ./backend
+      context: .
+      dockerfile: Dockerfile
       target: runtime
     restart: unless-stopped
     env_file: .env
@@ -74,24 +77,6 @@ services:
     # fails. Disable here; restart-policy catches crashes.
     healthcheck:
       disable: true
-
-  web:
-    build:
-      context: ./frontend
-      target: runtime
-      args:
-        # Relative URL — the SPA and the API are served from the same
-        # origin (edge Caddy → proxy → api), so whatever host the
-        # browser loaded the page from is the host the XHRs go to.
-        VITE_API_BASE_URL: /api
-        VITE_DEFAULT_LANGUAGE: en
-        # Pulled from .env so the GPL / paid key lands in the bundle.
-        # Defaults to GPL if unset; invalid/missing values make
-        # CKEditor throw invalid-license-key at runtime.
-        VITE_CKEDITOR_LICENSE_KEY: ${VITE_CKEDITOR_LICENSE_KEY:-GPL}
-    restart: unless-stopped
-    networks:
-      - edge
 
   mysql:
     image: mysql:8.0

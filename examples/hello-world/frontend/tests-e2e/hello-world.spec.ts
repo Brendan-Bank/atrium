@@ -30,7 +30,12 @@ import { API_URL, loginAsSuperAdmin, loginAsUser } from './helpers';
 const COMPOSE_FILES =
   process.env.E2E_COMPOSE_FILES ??
   '-f docker-compose.yml -f docker-compose.dev.yml ' +
-    '-f examples/hello-world/compose.yaml -f examples/hello-world/compose.dev.yaml';
+    '-f examples/hello-world/dev/compose.dev.yaml';
+// Where to invoke `docker compose` from. Defaults to repo root for the
+// dev overlay (paths inside it are repo-root-relative). Overridden for
+// the prod compose.yaml run, which lives in examples/hello-world/ and
+// is invoked from there.
+const COMPOSE_CWD = process.env.E2E_COMPOSE_CWD ?? '../../..';
 
 async function readState(req: APIRequestContext): Promise<{
   message: string;
@@ -176,11 +181,11 @@ test.describe('hello-world example', () => {
     // that moves the seed to startup hooks without making it
     // INSERT-IGNORE.
     execSync(`docker compose ${COMPOSE_FILES} restart api`, {
-      cwd: '../../..',
+      cwd: COMPOSE_CWD,
     });
     const out = execSync(
       `docker compose ${COMPOSE_FILES} exec -T mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -D"$MYSQL_DATABASE" -N -e "SELECT COUNT(*) FROM permissions WHERE code='\\''hello.toggle'\\''"'`,
-      { encoding: 'utf-8', cwd: '../../..' },
+      { encoding: 'utf-8', cwd: COMPOSE_CWD },
     ).trim();
     expect(Number.parseInt(out, 10)).toBe(1);
   });

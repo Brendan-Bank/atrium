@@ -1,0 +1,41 @@
+# Copyright (c) 2026 Brendan Bank
+# SPDX-License-Identifier: BSD-2-Clause
+
+# Repo-root .dockerignore for the unified Dockerfile (which builds with
+# the repo root as its context so a single COPY can reach both
+# backend/ and frontend/). Combines the per-package excludes that the
+# previous backend/.dockerignore and frontend/.dockerignore handled.
+
+# VCS
+.git
+.gitignore
+
+# Backend
+**/__pycache__
+**/*.py[cod]
+**/.venv
+**/venv
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+**/.coverage
+**/htmlcov
+**/*.egg-info
+backend/dist
+backend/build
+backend/tests/__pycache__
+
+# Frontend
+**/node_modules
+frontend/dist
+**/.vite
+**/playwright-report
+**/test-results
+
+# Note: examples/ is intentionally NOT excluded — the host extension
+# Dockerfile under examples/hello-world/ uses repo root as its build
+# context and COPYs the example sources from there. The unified
+# atrium image's Dockerfile only references backend/ and frontend/,
+# so leaving examples/ in the build context is a small upload cost
+# (a few hundred KB of source) for the convenience of a single
+# .dockerignore.
