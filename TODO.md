@@ -115,23 +115,9 @@ scratch; resist anything that's actually domain logic.
   regressions in the SSE / event_hub / `auth_sessions` lookup hot
   paths.
 
-## UX polish (deferred from PR #6)
-
-- **Default `/admin` to the System tab for app-config managers.**
-  Tried in PR #6 but reverted: the System tab's `useAdminAppConfig`
-  fires its `GET /admin/app-config` fast enough that on the second
-  `goto('/admin')` after a logout, the 401 hard-redirects via
-  `window.location.replace('/login')` before Playwright's `page.goto`
-  resolves its `load` event — `ERR_ABORTED`. The master default of
-  `users` happens to lose this race. Real fix: change the api.ts 401
-  interceptor to skip the hard redirect during initial page load
-  (e.g. when `document.readyState !== 'complete'`) so RequireAuth can
-  bounce via SPA navigation. Would also harden any other admin
-  surface that fetches before `me` resolves.
 ## Documentation
 
 - **Per-namespace operator playbook.** "When to flip
   `system.maintenance_mode`", "what `audit.retention_days` means
   legally", etc. Today this is vibes + the comments in
   `app_config.py`.
-- add BSD-2 licence to all files.
