@@ -34,3 +34,7 @@ RUN pnpm build
 # ---- runtime ----
 FROM ${ATRIUM_WEB_IMAGE} AS runtime
 COPY --from=builder /app/dist /usr/share/nginx/html/host
+# Inherited from nginxinc/nginx-unprivileged in the GHCR base, but
+# Trivy DS-0002 is text-based and won't trust an inherited USER —
+# re-state it so compose-build's image scan stays green.
+USER 101
