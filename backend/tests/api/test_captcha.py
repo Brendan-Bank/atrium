@@ -82,7 +82,7 @@ async def test_provider_none_register_no_token_required(client, engine):
         "/auth/register",
         json={
             "email": "noprov@example.com",
-            "password": "fresh-pw-12345",
+            "password": "Fresh-Pw-12345!",
             "full_name": "N",
         },
     )
@@ -111,7 +111,7 @@ async def test_turnstile_missing_token_register_400(client, engine):
         "/auth/register",
         json={
             "email": "miss@example.com",
-            "password": "fresh-pw-12345",
+            "password": "Fresh-Pw-12345!",
             "full_name": "M",
         },
     )
@@ -151,7 +151,7 @@ async def test_turnstile_invalid_token_register_400(client, engine, monkeypatch)
         "/auth/register",
         json={
             "email": "bad@example.com",
-            "password": "fresh-pw-12345",
+            "password": "Fresh-Pw-12345!",
             "full_name": "B",
             "captcha_token": "made-up",
         },
@@ -194,7 +194,7 @@ async def test_turnstile_valid_token_register_204(client, engine, monkeypatch):
         "/auth/register",
         json={
             "email": "good@example.com",
-            "password": "fresh-pw-12345",
+            "password": "Fresh-Pw-12345!",
             "full_name": "G",
             "captcha_token": "valid-token",
         },
@@ -211,7 +211,7 @@ async def test_hcaptcha_missing_token_register_400(client, engine):
         "/auth/register",
         json={
             "email": "hmiss@example.com",
-            "password": "fresh-pw-12345",
+            "password": "Fresh-Pw-12345!",
             "full_name": "H",
         },
     )
@@ -253,7 +253,7 @@ async def test_hcaptcha_valid_token_register_204(client, engine, monkeypatch):
         "/auth/register",
         json={
             "email": "hgood@example.com",
-            "password": "fresh-pw-12345",
+            "password": "Fresh-Pw-12345!",
             "full_name": "HG",
             "captcha_token": "h-valid",
         },
@@ -276,7 +276,7 @@ async def test_empty_secret_fails_open(client, engine, monkeypatch):
         "/auth/register",
         json={
             "email": "open-secret@example.com",
-            "password": "fresh-pw-12345",
+            "password": "Fresh-Pw-12345!",
             "full_name": "O",
             "captcha_token": "anything",
         },
@@ -310,7 +310,7 @@ async def test_network_error_fails_open(client, engine, monkeypatch):
         "/auth/register",
         json={
             "email": "neterr@example.com",
-            "password": "fresh-pw-12345",
+            "password": "Fresh-Pw-12345!",
             "full_name": "N",
             "captcha_token": "any",
         },
