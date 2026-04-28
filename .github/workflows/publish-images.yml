@@ -41,8 +41,16 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
-env:
-  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/atrium
+# IMAGE_NAME is computed per-job from ``github.repository_owner``
+# lowercased. The owner login can contain uppercase characters
+# (e.g. ``Brendan-Bank``) but GHCR refs are case-sensitive and reject
+# anything that isn't all-lowercase. ``docker/metadata-action`` is
+# tolerant — it normalises internally — but the per-arch refactor
+# also feeds the name straight into ``build-push-action``'s
+# ``outputs:`` ref and the merge step's ``printf``, neither of which
+# normalise. Computing once into ``$GITHUB_ENV`` keeps every later
+# reference consistent and avoids stamping a mixed-case ref into the
+# push.
 
 jobs:
   build:
@@ -57,10 +65,13 @@ jobs:
           - platform: linux/arm64
             runner: ubuntu-24.04-arm
     steps:
-      - name: Resolve platform pair
+      - name: Resolve image name + platform pair
         # buildx artifact names can't contain slashes; turn linux/amd64
         # into linux-amd64 for the digest artifact name + cache scope.
+        # ``${var,,}`` is bash's lowercase parameter expansion.
         run: |
+          owner="${{ github.repository_owner }}"
+          echo "IMAGE_NAME=ghcr.io/${owner,,}/atrium" >> "$GITHUB_ENV"
           platform=${{ matrix.platform }}
           echo "PLATFORM_PAIR=${platform//\//-}" >> "$GITHUB_ENV"
 
@@ -115,6 +126,11 @@ jobs:
     needs: build
     runs-on: ubuntu-24.04
     steps:
+      - name: Resolve image name
+        run: |
+          owner="${{ github.repository_owner }}"
+          echo "IMAGE_NAME=ghcr.io/${owner,,}/atrium" >> "$GITHUB_ENV"
+
       - name: Download digests
         uses: actions/download-artifact@v4
         with:
