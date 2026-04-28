@@ -11,14 +11,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Backend pytest is sharded across two jobs to roughly halve wall-clock
-  # time. ``backend-api`` carries the bulk (~154 tests, mostly HTTP /
-  # fastapi-users flows) and ``backend-core`` runs unit + integration +
-  # the healthz smoke (~41 tests, plus ruff because lint is fast and
-  # belongs on the lower-traffic shard). Both jobs use the same MySQL
-  # service and the same conftest — the session-scoped
+  # Backend pytest is sharded for parallel CI. ``backend-core`` runs
+  # unit + integration + healthz (~41 tests) and ruff. ``backend-api``
+  # runs the HTTP / fastapi-users flows (~154 tests) split across an
+  # N-way pytest-split matrix that auto-balances by stored test
+  # durations (``backend/.test_durations``). All shards use the same
+  # MySQL service and the same conftest — the session-scoped
   # ``run_migrations`` autouse fixture means even unit tests need a
-  # live database, so we don't skip the service on either shard.
+  # live database, so we don't skip the service on any shard.
+  #
+  # Refresh the durations file when the suite drifts: from
+  # ``backend/`` run ``uv run pytest tests/api --store-durations`` and
+  # commit the result. pytest-split falls back to count-based
+  # splitting if the file is missing or stale, so a stale checkin
+  # degrades gracefully rather than failing CI.
   backend-core:
     runs-on: ubuntu-latest
     defaults:
@@ -68,6 +74,14 @@ jobs:
 
   backend-api:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 2-way split today. Bumping to N requires updating ``splits``
+        # everywhere ``--splits`` appears below; ``group`` is whatever
+        # 1..N range matches.
+        group: [1, 2]
+    name: backend-api (${{ matrix.group }}/2)
     defaults:
       run:
         working-directory: backend
@@ -103,12 +117,16 @@ jobs:
       - name: Sync deps
         run: uv sync
 
-      - name: Pytest (api)
+      - name: Pytest (api, group ${{ matrix.group }}/2)
         env:
           DATABASE_URL: mysql+aiomysql://casa:casa@127.0.0.1:3306/casa_test
           APP_SECRET_KEY: test-secret
           JWT_SECRET: test-secret
-        run: uv run pytest tests/api --cov=app --cov-report=term-missing
+        # ``--splits 2 --group N`` is pytest-split's contract: each
+        # shard skips the ~half of tests it doesn't own. Coverage is
+        # per-shard (no combine step) — ``--cov-fail-under`` would
+        # need the combine, and we're not enforcing a threshold.
+        run: uv run pytest tests/api --splits 2 --group ${{ matrix.group }} --cov=app --cov-report=term-missing
 
   frontend:
     runs-on: ubuntu-latest
