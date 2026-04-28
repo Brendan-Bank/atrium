@@ -1,0 +1,96 @@
+# __BRAND_NAME__ — self-contained prod compose.
+#
+# Pulls atrium from GHCR, builds the host extension on top, brings up
+# api + worker + mysql. No proxy, no TLS — atrium speaks plain HTTP on
+# :8000 by design. Put your own TLS terminator (Caddy, nginx, the load
+# balancer at your edge) in front for production.
+#
+# Usage (from this directory):
+#
+#   cp .env.example .env  # fill in JWT_SECRET, DB password
+#   docker compose up -d --build
+#   make migrate
+#   make seed-admin EMAIL=you@example.com PASSWORD=...
+#
+# Environment variables come from .env via ${VAR} interpolation.
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        ATRIUM_IMAGE: ${ATRIUM_IMAGE:-ghcr.io/brendan-bank/atrium:__ATRIUM_VERSION__}
+    image: __HOST_NAME__:latest
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-prod}
+      APP_TIMEZONE: ${APP_TIMEZONE:-UTC}
+      APP_SECRET_KEY: ${APP_SECRET_KEY}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8000}
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-10080}
+      WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-localhost}
+      WEBAUTHN_RP_NAME: ${WEBAUTHN_RP_NAME:-__BRAND_NAME__}
+      WEBAUTHN_ORIGIN: ${WEBAUTHN_ORIGIN:-http://localhost:8000}
+      MAIL_BACKEND: ${MAIL_BACKEND:-console}
+      MAIL_FROM: ${MAIL_FROM:-no-reply@example.com}
+      ATRIUM_HOST_MODULE: __HOST_PKG__.bootstrap
+      # Host alembic runs with cwd=/opt/host_app (via -c
+      # /opt/host_app/alembic.ini) and its env.py imports from
+      # atrium's `app` package. Atrium's source lives at /app — put
+      # it on PYTHONPATH so the import resolves no matter where the
+      # caller's cwd is.
+      PYTHONPATH: /app
+    ports:
+      - "8000:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  worker:
+    image: __HOST_NAME__:latest
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-prod}
+      APP_TIMEZONE: ${APP_TIMEZONE:-UTC}
+      APP_SECRET_KEY: ${APP_SECRET_KEY}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8000}
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      MAIL_BACKEND: ${MAIL_BACKEND:-console}
+      MAIL_FROM: ${MAIL_FROM:-no-reply@example.com}
+      ATRIUM_HOST_MODULE: __HOST_PKG__.bootstrap
+      PYTHONPATH: /app
+    command: ["python", "-m", "app.worker"]
+    depends_on:
+      mysql:
+        condition: service_healthy
+      api:
+        condition: service_started
+    healthcheck:
+      disable: true
+
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --default-time-zone=+00:00
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  mysql_data:
+    name: __HOST_PKG___mysql_data

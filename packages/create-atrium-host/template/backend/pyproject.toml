@@ -1,0 +1,17 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "__HOST_NAME__-host"
+version = "0.1.0"
+description = "__BRAND_NAME__ host extension for Atrium"
+requires-python = ">=3.12"
+
+# All runtime deps come from the atrium image (FastAPI, SQLAlchemy,
+# Alembic, structlog). Listing them here would just shadow atrium's
+# pinned versions. The package is installed via `pip install ./backend`
+# inside the image so `__HOST_PKG__` is importable on PYTHONPATH.
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/__HOST_PKG__"]

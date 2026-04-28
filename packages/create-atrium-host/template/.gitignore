@@ -1,0 +1,29 @@
+# Local secrets — never commit.
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+build/
+dist/
+
+# Node / Vite
+node_modules/
+frontend/dist/
+*.tsbuildinfo
+
+# Editors
+.vscode/
+.idea/
+.DS_Store
+
+# Local agent / Conductor scratch
+.context/
