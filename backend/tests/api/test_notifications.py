@@ -6,14 +6,15 @@
 Atrium ships:
 
 - ``services.notifications.notify_user`` — slim helper: add a row,
-  publish a refresh event on the SSE pub/sub.
+  publish the matching ``{kind, payload}`` event on the SSE pub/sub.
 - ``/notifications`` — list, unread count, mark-read, mark-all-read,
   delete, SSE stream.
 
 Tests verify the helper writes through the active session, that
 endpoints are scoped to the calling user (no cross-user leakage), and
-that the helper publishes to the in-process ``event_hub`` so the SSE
-bell refetches.
+that the helper publishes the typed event on the in-process
+``event_hub`` so the SSE bell refetches and host bundles can route on
+the kind.
 """
 from __future__ import annotations
 
@@ -57,9 +58,11 @@ async def test_notify_user_writes_row_and_publishes_event(client, engine):
             assert row.payload == {"hello": "there"}
             assert row.read_at is None
 
-        # The helper also pokes event_hub so the SSE bell refetches.
+        # The helper also pokes event_hub so the SSE bell refetches and
+        # host bundles can route the typed event to selective query
+        # invalidations. The published payload mirrors the row.
         event = await queue.get()
-        assert event == {"kind": "refresh"}
+        assert event == {"kind": "welcome", "payload": {"hello": "there"}}
     finally:
         hub.unsubscribe(admin.id, queue)
 

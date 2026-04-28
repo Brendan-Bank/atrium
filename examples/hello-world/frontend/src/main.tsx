@@ -27,6 +27,7 @@ import {
   HelloToggledNotification,
   helloToggledTitle,
 } from './HelloNotification';
+import { queryClient } from './queryClient';
 
 interface HostNotification {
   id: number;
@@ -34,6 +35,11 @@ interface HostNotification {
   payload: Record<string, unknown>;
   read_at: string | null;
   created_at: string;
+}
+
+interface AtriumEvent {
+  kind: string;
+  payload: Record<string, unknown>;
 }
 
 interface AtriumRegistry {
@@ -75,6 +81,10 @@ interface AtriumRegistry {
     title?: (n: HostNotification) => string;
     href?: (n: HostNotification) => string;
   }) => void;
+  subscribeEvent: (
+    kind: string,
+    handler: (event: AtriumEvent) => void,
+  ) => () => void;
 }
 
 /** atrium's React, exposed at ``window.React`` by atrium's main.tsx
@@ -158,5 +168,14 @@ if (!reg) {
           createdAt={n.created_at}
         />,
       ),
+  });
+  // Subscribe to the typed SSE event so the widget refreshes the
+  // moment another tab (or another user) flips the toggle, instead
+  // of waiting for the 5s polling interval. The QueryClient here is
+  // the host bundle's own — atrium's bell uses its own client and
+  // refetches independently. See ``queryClient.ts``: ``refetchInterval``
+  // is now off, the SSE stream owns freshness.
+  reg.subscribeEvent('hello.toggled', () => {
+    queryClient.invalidateQueries({ queryKey: ['hello', 'state'] });
   });
 }

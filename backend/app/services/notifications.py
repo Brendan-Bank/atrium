@@ -4,8 +4,9 @@
 """In-app notification helper.
 
 Writes a `notifications` row and pokes the user's SSE channel via
-`event_hub` so the bell refetches. Caller controls the transaction —
-this just `session.add`s.
+`event_hub` so the bell refetches and host bundles can route the
+typed event to selective React Query cache invalidations. Caller
+controls the transaction — this just `session.add`s.
 """
 from __future__ import annotations
 
@@ -24,9 +25,12 @@ def notify_user(
     kind: str,
     payload: dict[str, Any],
 ) -> None:
-    """Add a notification row and publish a refresh event.
+    """Add a notification row and publish the matching SSE event.
 
-    `kind` is a free-form string; the UI maps it to a presentation.
+    The published event mirrors the row: ``{"kind": kind, "payload":
+    payload}``. The bell refetches on every event regardless of kind;
+    host bundles use the kind to invalidate only their own affected
+    query keys instead of fanning out a broad refresh.
     """
     session.add(Notification(user_id=user_id, kind=kind, payload=payload))
-    hub.publish(user_id, {"kind": "refresh"})
+    hub.publish(user_id, {"kind": kind, "payload": payload})

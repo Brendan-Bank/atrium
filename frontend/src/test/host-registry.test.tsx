@@ -37,7 +37,12 @@ import {
   registerNotificationKind,
   registerProfileItem,
   registerRoute,
+  subscribeEvent,
 } from '@/host/registry';
+import {
+  __eventBusSubscriberCountForTests,
+  dispatchAtriumEvent,
+} from '@/host/events';
 import type { AppNotification } from '@/hooks/useNotifications';
 
 const sampleNotification = (
@@ -269,6 +274,39 @@ describe('host registry', () => {
     } finally {
       warn.mockRestore();
     }
+  });
+
+  it('subscribeEvent on the registry routes to the event bus', () => {
+    // The registry just re-exports the bus's subscribe helper; this
+    // pins down that __ATRIUM_REGISTRY__.subscribeEvent shares state
+    // with the standalone export, so a host bundle calling either one
+    // lands in the same fan-out.
+    const handler = vi.fn();
+    const off = subscribeEvent('booking.created', handler);
+    expect(__eventBusSubscriberCountForTests('booking.created')).toBe(1);
+    dispatchAtriumEvent({ kind: 'booking.created', payload: { id: 1 } });
+    expect(handler).toHaveBeenCalledOnce();
+    off();
+    expect(__eventBusSubscriberCountForTests('booking.created')).toBe(0);
+  });
+
+  it('__ATRIUM_REGISTRY__.subscribeEvent is the same helper', () => {
+    const reg = window.__ATRIUM_REGISTRY__!;
+    const handler = vi.fn();
+    const off = reg.subscribeEvent('block.updated', handler);
+    dispatchAtriumEvent({ kind: 'block.updated', payload: { id: 7 } });
+    expect(handler).toHaveBeenCalledWith({
+      kind: 'block.updated',
+      payload: { id: 7 },
+    });
+    off();
+  });
+
+  it('__resetRegistryForTests also clears event bus subscriptions', () => {
+    subscribeEvent('block.updated', () => {});
+    expect(__eventBusSubscriberCountForTests('block.updated')).toBe(1);
+    __resetRegistryForTests();
+    expect(__eventBusSubscriberCountForTests('block.updated')).toBe(0);
   });
 
   it('window.__ATRIUM_REGISTRY__ writes through to the same state', () => {

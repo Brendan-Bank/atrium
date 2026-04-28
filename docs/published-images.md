@@ -254,7 +254,8 @@ container serves it at `/host/...` (same origin as the SPA, so no CORS).
 ### The registries
 
 ```ts
-// All six exposed on window.__ATRIUM_REGISTRY__:
+// All six render-time registries plus the SSE event tap, exposed
+// on window.__ATRIUM_REGISTRY__:
 registerHomeWidget({ key, render })           // Card on the home page.
 registerRoute({ key, path, element,           // Adds a <Route> in the
                 requireAuth?, layout? })       //   app router.
@@ -266,6 +267,9 @@ registerProfileItem({ key, slot?,             // Card on /profile.
                       condition?, render })
 registerNotificationKind({ kind, render,      // Per-kind rendering for
                            title?, href? })   //   the bell + inbox.
+subscribeEvent(kind, handler)                 // Tap into atrium's
+                                              //   SSE stream; handler
+                                              //   receives {kind,payload}.
 ```
 
 - `registerRoute`'s `requireAuth` defaults to `true`; `layout` defaults to
@@ -288,9 +292,31 @@ registerNotificationKind({ kind, render,      // Per-kind rendering for
   only required field — atrium falls back to the kind code +
   `JSON.stringify(payload)` when no renderer is registered, so kinds
   without renderers keep working.
+- `subscribeEvent(kind, handler)` taps atrium's single
+  `EventSource('/notifications/stream')`. The handler fires whenever a
+  matching notification lands and receives `{ kind, payload }` —
+  exactly the row's typed body, the same shape `registerNotificationKind`'s
+  renderer sees. Returns an `unsubscribe` function; host bundles
+  usually subscribe once at import time and never unsubscribe (the
+  connection stays open while the user is logged in). The typical
+  use is host-side React Query invalidation:
+  ```ts
+  reg.subscribeEvent('booking.created', () => {
+    queryClient.invalidateQueries({ queryKey: ['bookings'] });
+    queryClient.invalidateQueries({ queryKey: ['calendar'] });
+  });
+  ```
+  One connection per tab is shared between atrium's bell and every
+  host subscriber — there is no second `EventSource` to manage. The
+  bell still refetches on every event regardless of kind, so the
+  helper is purely for **selective** host invalidation; subscribing
+  is optional.
 
 Same key (or `kind`) registered twice → last write wins, with a
-`console.warn` collision notice.
+`console.warn` collision notice. `subscribeEvent` is a different
+shape (no key, returns an unsubscribe handle) and follows
+register-once-then-stay semantics — a duplicate subscription with
+the same handler reference is a silent no-op.
 
 ### Building the host bundle
 

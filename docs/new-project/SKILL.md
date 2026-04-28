@@ -333,6 +333,7 @@ registerNavItem({ key, label, to, icon?, condition? })
 registerAdminTab({ key, label, icon?, perm?, element })
 registerProfileItem({ key, slot?, render, condition? })
 registerNotificationKind({ kind, render, title?, href? })
+subscribeEvent(kind, (evt) => { /* qc.invalidateQueries(...) */ })
 ```
 
 ## Hard rules
