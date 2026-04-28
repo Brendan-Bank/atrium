@@ -10,6 +10,13 @@
  * populated at SPA boot from a runtime-loaded host bundle (see
  * ``main.tsx`` and ``system.host_bundle_url``).
  *
+ * Alongside the render-time registries the same surface exposes
+ * ``subscribeEvent(kind, handler)`` — a tap into atrium's single
+ * ``EventSource('/notifications/stream')``. Hosts subscribe at import
+ * time and route the typed ``{kind, payload}`` event to their own
+ * React Query cache invalidations without standing up a second
+ * connection.
+ *
  * The registries are deliberately thin: each one is an array, ordered
  * by registration call order, and the consumer components iterate
  * them at first render. There is no mutation channel after boot —
@@ -29,6 +36,12 @@ import type { ReactElement } from 'react';
 
 import type { CurrentUser } from '@/lib/auth';
 import type { AppNotification } from '@/hooks/useNotifications';
+import {
+  __resetEventBusForTests as __resetEventBusForTestsRef,
+  subscribeEvent,
+} from './events';
+
+export type { AtriumEvent, AtriumEventHandler } from './events';
 
 /** Layout width for a home-page widget. ``narrow`` matches the default
  *  680px column atrium ships for the welcome content; ``wide`` extends
@@ -226,6 +239,16 @@ const baseRegistry = {
   registerAdminTab,
   registerProfileItem,
   registerNotificationKind,
+  /** Subscribe to a notification ``kind`` on the SSE stream. Atrium
+   *  owns one connection per tab; this is how a host bundle plugs
+   *  into it without standing up its own ``EventSource``. The handler
+   *  receives the published ``{kind, payload}`` event and typically
+   *  calls ``queryClient.invalidateQueries(...)`` to refresh exactly
+   *  the queries the kind affects. Returns an unsubscribe function;
+   *  host bundles usually subscribe once at import time and never
+   *  unsubscribe (the connection stays open while the user is logged
+   *  in). See ``subscribeEvent`` in ``host/events.ts``. */
+  subscribeEvent,
 } as const;
 
 export type AtriumRegistry = typeof baseRegistry;
@@ -300,6 +323,10 @@ export function __resetRegistryForTests(): void {
   adminTabs.length = 0;
   profileItems.length = 0;
   notificationRenderers.length = 0;
+  // Event bus is part of the same surface; the rest of the helpers
+  // are imported separately from ``./events`` for tests that want to
+  // exercise just the bus.
+  __resetEventBusForTestsRef();
 }
 
 declare global {
@@ -319,4 +346,5 @@ export {
   registerAdminTab,
   registerProfileItem,
   registerNotificationKind,
+  subscribeEvent,
 };

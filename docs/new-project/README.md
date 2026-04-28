@@ -610,6 +610,10 @@ interface AtriumRegistry {
     title?: (n: { kind: string; payload: Record<string, unknown> }) => string;
     href?: (n: { kind: string; payload: Record<string, unknown> }) => string;
   }) => void;
+  subscribeEvent: (
+    kind: string,
+    handler: (event: { kind: string; payload: Record<string, unknown> }) => void,
+  ) => () => void;
 }
 
 const AtriumReact = (
@@ -940,6 +944,7 @@ Adding an endpoint, a job, a UI fragment — the standard moves:
 | Admin tab                     | A component, gated by a permission                       | `reg.registerAdminTab({ key, label, icon?, perm, element })`               |
 | Profile-page card             | A component                                              | `reg.registerProfileItem({ key, slot?, render, condition? })`              |
 | Bell / inbox per-kind UI      | Title + (optional) detail-modal element                  | `reg.registerNotificationKind({ kind, render, title?, href? })`            |
+| Selective React Query refresh | Handler that invalidates the host's affected query keys  | `reg.subscribeEvent('your.kind', (evt) => qc.invalidateQueries({...}))`    |
 
 Permission gating on the API: `Depends(require_perm("your_thing.read"))`.
 
