@@ -11,7 +11,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  backend:
+  # Backend pytest is sharded for parallel CI. ``backend-core`` runs
+  # unit + integration + healthz (~41 tests) and ruff. ``backend-api``
+  # runs the HTTP / fastapi-users flows (~154 tests) split across an
+  # N-way pytest-split matrix that auto-balances by stored test
+  # durations (``backend/.test_durations``). All shards use the same
+  # MySQL service and the same conftest — the session-scoped
+  # ``run_migrations`` autouse fixture means even unit tests need a
+  # live database, so we don't skip the service on any shard.
+  #
+  # Refresh the durations file when the suite drifts: from
+  # ``backend/`` run ``uv run pytest tests/api --store-durations`` and
+  # commit the result. pytest-split falls back to count-based
+  # splitting if the file is missing or stale, so a stale checkin
+  # degrades gracefully rather than failing CI.
+  backend-core:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -51,12 +65,68 @@ jobs:
       - name: Ruff lint
         run: uv run ruff check .
 
-      - name: Pytest
+      - name: Pytest (unit + integration + healthz)
         env:
           DATABASE_URL: mysql+aiomysql://casa:casa@127.0.0.1:3306/casa_test
           APP_SECRET_KEY: test-secret
           JWT_SECRET: test-secret
-        run: uv run pytest --cov=app --cov-report=term-missing
+        run: uv run pytest tests/unit tests/integration tests/test_healthz.py --cov=app --cov-report=term-missing
+
+  backend-api:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 2-way split today. Bumping to N requires updating ``splits``
+        # everywhere ``--splits`` appears below; ``group`` is whatever
+        # 1..N range matches.
+        group: [1, 2]
+    name: backend-api (${{ matrix.group }}/2)
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: rootpw
+          MYSQL_DATABASE: casa_test
+          MYSQL_USER: casa
+          MYSQL_PASSWORD: casa
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -u root -prootpw"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
+
+      - name: Install system deps
+        run: sudo apt-get update && sudo apt-get install -y default-libmysqlclient-dev pkg-config
+
+      - name: Sync deps
+        run: uv sync
+
+      - name: Pytest (api, group ${{ matrix.group }}/2)
+        env:
+          DATABASE_URL: mysql+aiomysql://casa:casa@127.0.0.1:3306/casa_test
+          APP_SECRET_KEY: test-secret
+          JWT_SECRET: test-secret
+        # ``--splits 2 --group N`` is pytest-split's contract: each
+        # shard skips the ~half of tests it doesn't own. Coverage is
+        # per-shard (no combine step) — ``--cov-fail-under`` would
+        # need the combine, and we're not enforcing a threshold.
+        run: uv run pytest tests/api --splits 2 --group ${{ matrix.group }} --cov=app --cov-report=term-missing
 
   frontend:
     runs-on: ubuntu-latest
