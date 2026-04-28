@@ -228,24 +228,21 @@ jobs:
             frontend/pnpm-lock.yaml
             examples/hello-world/frontend/pnpm-lock.yaml
 
-      - uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd  # v4.0.0
-
       - name: Build atrium runtime image
         # Local atrium build instead of pulling from GHCR so PRs don't
         # depend on a published artifact for the branch under test.
-        # ``cache-from``/``cache-to`` reuse the same GHA cache scope as
-        # ``compose-build`` and ``publish-images``: a layer built once
-        # is reused across all three jobs (and across re-runs on the
-        # same PR).
-        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f  # v7.1.0
-        with:
-          context: .
-          file: Dockerfile
-          target: runtime
-          load: true
-          tags: atrium-local:source
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+        # Stays on raw ``docker build`` (not buildx/build-push-action)
+        # because the next step is ``docker compose up --build`` which
+        # references this image as ``FROM ${ATRIUM_IMAGE}`` in the
+        # example's Dockerfile. Compose's active buildx builder must
+        # be able to resolve that FROM against the docker daemon's
+        # image store — a docker-container builder (what
+        # ``setup-buildx-action`` activates by default) can't see
+        # daemon-local tags and falls back to pulling from docker.io,
+        # which fails with ``pull access denied``. The cache savings
+        # would have been parallel to ``backend`` (not on the
+        # critical path) so the trade isn't worth the breakage.
+        run: docker build -t atrium-local:source --target runtime .
 
       - name: Prepare smoke .env
         # The example compose reads .env from examples/hello-world/.
