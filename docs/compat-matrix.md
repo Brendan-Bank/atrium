@@ -23,6 +23,7 @@ then read forward to plan the upgrade path.
 | [0.11.2](https://github.com/Brendan-Bank/atrium/releases/tag/v0.11.2) | unchanged | `registerNotificationKind` | — | — |
 | [0.11.3](https://github.com/Brendan-Bank/atrium/releases/tag/v0.11.3) | unchanged | `subscribeEvent`. **SSE wire-format change**: `/notifications/stream` events now carry the row's actual `{kind, payload}` instead of the literal `{kind: 'refresh'}` | — | — |
 | [0.12.0](https://github.com/Brendan-Bank/atrium/releases/tag/v0.12.0) | unchanged | `registerLocale`; `render()` form on `registerRoute` and `registerAdminTab`; `roles[]` (role codes) added to `/admin/users` responses | `element:` shape on `registerRoute` / `registerAdminTab` is soft-deprecated — keep working via fallback, but new code should pass `render: () => …` | — |
+| [0.14.0](https://github.com/Brendan-Bank/atrium/releases/tag/v0.14.0) | unchanged | `__ATRIUM_VERSION__` on `window` for runtime feature detection; `HostForeignKey()` + `emit_host_foreign_keys` for cross-base FKs; typed `HostWorkerCtx.register_job_handler()` for `init_worker(host)`; published host SDK packages (`@brendan-bank/atrium-host-{types,bundle-utils,test-utils}`); `__atrium_t__('common.*')` shared i18n keys; `npx @brendan-bank/create-atrium-host` scaffolder | — | — |
 
 A blank cell means "no change in this release on that axis". Schema rows
 list the alembic head a host can rely on coexisting with — atrium owns
