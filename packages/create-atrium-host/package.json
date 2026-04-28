@@ -1,0 +1,41 @@
+{
+  "name": "@brendan-bank/create-atrium-host",
+  "version": "0.14.0",
+  "description": "Scaffolder for new atrium host extensions: backend Python package + frontend Vite bundle + compose stack + CI, all wired against atrium's published image and host SDK packages. Run via `npx @brendan-bank/create-atrium-host <name>`.",
+  "license": "BSD-2-Clause",
+  "type": "module",
+  "bin": {
+    "create-atrium-host": "bin/index.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "template",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "echo 'create-atrium-host is plain ESM JS; no build step.'",
+    "typecheck": "echo 'create-atrium-host is plain ESM JS; no typecheck step.'",
+    "test": "node --test test/names.test.js test/render.test.js",
+    "smoke": "node bin/index.js smoke-test-host --yes-defaults --no-git --out /tmp/atrium-scaffold-smoke && echo 'smoke ok'"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "kleur": "^4.1.5",
+    "prompts": "^2.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://npm.pkg.github.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Brendan-Bank/atrium.git",
+    "directory": "packages/create-atrium-host"
+  }
+}

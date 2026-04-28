@@ -5,8 +5,45 @@ its own repo, `FROM`s the published atrium image, adds a backend Python
 package and a frontend host bundle, and wires both into atrium through a
 narrow extension contract — no atrium files are edited.
 
-This document is the operational walkthrough. The contract surface (image
-catalogue, tagging, registries) is in
+## The fast path: scaffolder
+
+For a vanilla host (one Python module, one frontend bundle, the
+default extension shape), the recommended on-ramp is the scaffolder:
+
+```sh
+npx @brendan-bank/create-atrium-host casa-del-leone
+cd casa-del-leone
+cp .env.example .env                   # fill in secrets
+make dev-bootstrap
+make seed-admin EMAIL=you@example.com PASSWORD='good-password'
+make seed-bundle
+open http://localhost:8000
+```
+
+The emitted repo is git-initialised, has CI wired
+(`.github/workflows/ci.yml` + `dependabot.yml`), pulls the published
+`@brendan-bank/atrium-host-{types,bundle-utils,test-utils}` packages,
+and ships a worked example for every registry slot — home widget,
+route, nav item, admin tab, profile-page card. `make test` is green
+out of the box once the packages are reachable.
+
+Run `npx @brendan-bank/create-atrium-host --help` for the flag list
+(`--yes-defaults`, `--no-git`, `--out`, `--atrium`).
+
+## The custom path: this guide
+
+The rest of this document is the verbose, hand-rolled walkthrough.
+Use it when:
+
+- You need a non-vanilla shape (multiple host packages in one repo,
+  custom alembic chain layout, no Mantine, ship-your-own-SPA-at-root).
+- You're retrofitting an existing FastAPI / SQLAlchemy / React app
+  rather than starting blank — see *Retrofitting an existing app*
+  below.
+- You want to read every file before agreeing to it (the scaffolder
+  emits ~34 files; this guide is what each of them does).
+
+The contract surface (image catalogue, tagging, registries) is in
 [`../published-images.md`](../published-images.md); the canonical worked
 example is [`../../examples/hello-world/`](../../examples/hello-world/),
 which exercises every extension slot end to end.

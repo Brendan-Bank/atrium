@@ -176,6 +176,67 @@ jobs:
       - name: Build
         run: pnpm build
 
+  scaffolder:
+    # Smoke-test the create-atrium-host scaffolder. Two passes:
+    #   1. Unit tests via Node's built-in runner — covers the
+    #      template substitution + name validation logic.
+    #   2. Render the template into a temp dir non-interactively and
+    #      check the structure (file count, no leftover __PLACEHOLDER__
+    #      tokens, key files parse as JSON / TS).
+    #
+    # The emitted repo's `make test` is NOT runnable here because it
+    # depends on the `@brendan-bank/atrium-*` packages being published
+    # at the version the template pins. That happens at release time;
+    # post-publish the same scaffolder is exercised manually as part
+    # of the release ritual (RELEASING.md step 1.5+).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0
+        with:
+          node-version: "22"
+
+      - uses: pnpm/action-setup@903f9c1a6ebcba6cf41d87230be49611ac97822e  # v6.0.3
+        with:
+          version: 10.33.1
+
+      - name: Install workspace deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Scaffolder unit tests
+        working-directory: packages/create-atrium-host
+        run: node --test test/names.test.js test/render.test.js
+
+      - name: Render a host non-interactively
+        run: |
+          rm -rf /tmp/scaffold-out
+          node packages/create-atrium-host/bin/index.js casa-del-leone \
+            --yes-defaults --no-git --out /tmp/scaffold-out
+
+      - name: Verify emitted structure
+        run: |
+          set -e
+          test -f /tmp/scaffold-out/Dockerfile
+          test -f /tmp/scaffold-out/compose.yaml
+          test -f /tmp/scaffold-out/Makefile
+          test -f /tmp/scaffold-out/backend/pyproject.toml
+          test -f /tmp/scaffold-out/backend/alembic/versions/0001_init.py
+          test -f /tmp/scaffold-out/backend/src/casa_del_leone/bootstrap.py
+          test -f /tmp/scaffold-out/backend/src/casa_del_leone/router.py
+          test -f /tmp/scaffold-out/backend/src/casa_del_leone/models.py
+          test -f /tmp/scaffold-out/frontend/package.json
+          test -f /tmp/scaffold-out/frontend/src/main.tsx
+          test -f /tmp/scaffold-out/frontend/src/CasaDelLeoneWidget.tsx
+          test -f /tmp/scaffold-out/frontend/src/test/CasaDelLeoneWidget.test.tsx
+          test -f /tmp/scaffold-out/.github/workflows/ci.yml
+          # Verify package.json parses cleanly.
+          node -e "require('/tmp/scaffold-out/frontend/package.json')"
+          # No leftover scaffolder placeholders. Atrium's own globals
+          # (e.g. __ATRIUM_REGISTRY__) are not in this set so they
+          # don't trip the check.
+          ! grep -rE '__(HOST_NAME|HOST_PKG|BRAND_NAME|BRAND_PASCAL|BRAND_PRIMARY|ATRIUM_VERSION)__' /tmp/scaffold-out
+
   e2e:
     # Smoke-only: spin up the full stack with compose and run the four
     # golden-path Playwright specs (smoke project) to prove the app

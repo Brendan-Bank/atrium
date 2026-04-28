@@ -68,12 +68,21 @@ don't bump it here, every host running the new image will report the
 old version.
 
 The frontend SDK packages (`packages/host-types`,
-`packages/host-bundle-utils`) version in **lockstep with the image**
-— a host pinning `^0.14` of either package implies "compatible with
-atrium 0.14.x runtime image". Bump all three together. The example
-under `examples/hello-world/frontend` consumes the packages via
-`workspace:*` so it picks up the new version automatically; no edit
-needed there.
+`packages/host-bundle-utils`, `packages/test-utils`) version in
+**lockstep with the image** — a host pinning `^0.14` of either
+package implies "compatible with atrium 0.14.x runtime image". Bump
+all of them together along with `packages/create-atrium-host` (whose
+default `--atrium` pin and emitted templates carry the same number).
+The example under `examples/hello-world/frontend` consumes the
+packages via `workspace:*` so it picks up the new version
+automatically; no edit needed there.
+
+The scaffolder (`packages/create-atrium-host/src/cli.js`) hard-codes
+the default `--atrium` version in `DEFAULT_ATRIUM_VERSION`. Bump that
+constant to the **major.minor** of the release you're cutting (e.g.
+`0.14`) — the emitted host's package.json and Dockerfile both pin
+through it, so a stale value would emit hosts pointing at the
+previous line.
 
 Land the bumps on the feature branch *before* tagging so master and
 the git tag agree:
@@ -113,6 +122,11 @@ quickly fall behind:
   examples should match the image's `X.Y` once you cross a minor.
   The version sweep is otherwise driven by the `package.json`
   bumps above; the README values are illustrative.
+- `packages/create-atrium-host/src/cli.js` —
+  `DEFAULT_ATRIUM_VERSION` (line ~30). The emitted host's compose
+  + Dockerfile + frontend package.json all pin through it.
+- `packages/create-atrium-host/README.md` — the `--atrium` default
+  call-out in the options table.
 
 If a doc references an atrium version, it needs updating with each
 release. If it doesn't, it stays untouched.

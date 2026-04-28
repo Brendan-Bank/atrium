@@ -17,6 +17,27 @@ canonical worked example is [`../../examples/hello-world/`](../../examples/hello
 This SKILL.md is the procedure to follow when an agent is doing the
 bootstrap.
 
+## Default to the scaffolder
+
+For a vanilla host (single Python module, single frontend bundle, the
+standard extension shape), **run the scaffolder rather than emitting
+files by hand**:
+
+```sh
+npx @brendan-bank/create-atrium-host <project-name> --yes-defaults --no-git
+```
+
+The emitted repo wires every registry slot, ships CI, and uses the
+published `@brendan-bank/atrium-host-*` packages — its `frontend/src/main.tsx`
+is the post-foundation shape (~10 lines, no wrapper-element code). Skim
+the emitted README and the demo `Welcome*` components, delete what
+you don't need, and start adding your domain code.
+
+Drop down to the manual procedure below only when the user explicitly
+asks for a non-default shape (multiple host packages in one repo,
+custom alembic layout, ship-your-own-SPA, retrofit of an existing
+codebase).
+
 > **Example version-pinning.** `examples/hello-world/` tracks `master`
 > and exercises whatever extension surface ships at HEAD. If the user
 > pins their atrium image to an older `X.Y` tag (sensible for prod),

@@ -6,6 +6,19 @@ through declared extension points without editing atrium files. This document
 describes what gets published, where, how it's tagged, and the contract a host
 app implements.
 
+**Fast on-ramp for new hosts**:
+
+```sh
+npx @brendan-bank/create-atrium-host casa-del-leone
+cd casa-del-leone && cp .env.example .env && make dev-bootstrap
+```
+
+The scaffolder ([`packages/create-atrium-host`](../packages/create-atrium-host/))
+emits a working repo wired against the published image and the host SDK
+packages. Use it for any vanilla host shape; drop down to the manual
+walkthrough below only for non-default layouts (multiple host packages,
+custom alembic shape, retrofit of an existing app).
+
 For a worked example that exercises every extension point, see
 [`examples/hello-world/`](../examples/hello-world/). For a step-by-step
 walkthrough of standing up a fresh host project from nothing — including
