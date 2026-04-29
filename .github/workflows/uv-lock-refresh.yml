@@ -48,11 +48,20 @@ jobs:
         # the workflow_run consumer doesn't have to trust anything
         # from the PR head — it reads files we wrote, validates
         # their shape, and fails closed.
+        #
+        # Pass the values via env, NOT through ``${{ ... }}`` template
+        # interpolation in the run script, so a maliciously-named
+        # branch (``foo'; rm -rf /; echo '``) can't break out of the
+        # shell quoting (``actions/code-injection``).
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           mkdir -p pr-meta
-          printf '%s' '${{ github.event.pull_request.number }}'  > pr-meta/number
-          printf '%s' '${{ github.event.pull_request.head.ref }}' > pr-meta/head_ref
-          printf '%s' '${{ github.event.pull_request.head.sha }}' > pr-meta/head_sha
+          printf '%s' "$PR_NUMBER"   > pr-meta/number
+          printf '%s' "$PR_HEAD_REF" > pr-meta/head_ref
+          printf '%s' "$PR_HEAD_SHA" > pr-meta/head_sha
 
       - name: Upload uv.lock
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v4.6.2

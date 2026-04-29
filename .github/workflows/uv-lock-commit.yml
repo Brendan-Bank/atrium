@@ -7,18 +7,17 @@ name: uv-lock-commit
 # context). Triggered by the unprivileged workflow finishing
 # successfully on a Dependabot PR; this one runs in the base-repo
 # context (default branch's YAML), holds ``contents: write``, and
-# does only git plumbing — it never executes a script from the PR.
+# never checks out the PR branch — the lockfile is written via the
+# GitHub Contents API directly. That keeps every "untrusted-checkout"
+# anti-pattern out of the privileged path: no ``actions/checkout`` of
+# a PR ref, no ``run:`` block executing a script from PR content.
 #
 # The flow:
 #   1. Validate the originating workflow_run was a successful
 #      Dependabot ``pull_request`` event.
 #   2. Download the uv-lock + pr-meta artifacts from that run.
-#   3. Sanity-check the metadata before it touches git plumbing.
-#   4. Check out the PR head ref (no code execution from PR — just
-#      ``git fetch`` + ``git checkout``).
-#   5. Verify the head SHA still matches what the artifact was built
-#      against — abort if the branch moved.
-#   6. Copy uv.lock from artifact, commit, push.
+#   3. Sanity-check the metadata before any of it touches gh.
+#   4. PUT the new uv.lock to the PR branch via the Contents API.
 
 on:
   workflow_run:
@@ -54,55 +53,60 @@ jobs:
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Validate PR metadata
-        id: pr
-        # Refs from the PR are attacker-influenced (Dependabot is the
-        # actor but the branch name on a Dependabot PR is well-formed
-        # by convention; we still pin the shape before letting it
-        # near git). Each value goes through a regex; an invalid
-        # value fails the workflow loudly.
+      - name: Validate PR metadata and apply uv.lock
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        # Whole step is bash with ``set -euo pipefail`` and explicit
+        # env vars — nothing comes from ``${{ ... }}`` interpolation,
+        # and nothing from the artifact is fed to a shell unquoted.
+        # Fails closed on any unexpected metadata shape.
         run: |
-          set -e
+          set -euo pipefail
+
           NUMBER=$(cat artifact-pr-meta/number)
           HEAD_REF=$(cat artifact-pr-meta/head_ref)
           HEAD_SHA=$(cat artifact-pr-meta/head_sha)
-          [[ "$NUMBER"  =~ ^[0-9]+$ ]]              || { echo "bad PR number: $NUMBER" >&2; exit 1; }
-          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]       || { echo "bad SHA: $HEAD_SHA"     >&2; exit 1; }
-          [[ "$HEAD_REF" =~ ^[A-Za-z0-9._/-]+$ ]]   || { echo "bad ref: $HEAD_REF"     >&2; exit 1; }
-          {
-            echo "number=$NUMBER"
-            echo "head_ref=$HEAD_REF"
-            echo "head_sha=$HEAD_SHA"
-          } >> "$GITHUB_OUTPUT"
 
-      - name: Checkout PR branch
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-        with:
-          ref: ${{ steps.pr.outputs.head_ref }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+          [[ "$NUMBER"   =~ ^[0-9]+$ ]]            || { echo "bad PR number"  >&2; exit 1; }
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]      || { echo "bad SHA"        >&2; exit 1; }
+          [[ "$HEAD_REF" =~ ^[A-Za-z0-9._/-]+$ ]]  || { echo "bad ref"        >&2; exit 1; }
 
-      - name: Apply uv.lock and commit
-        env:
-          EXPECTED_SHA: ${{ steps.pr.outputs.head_sha }}
-        run: |
-          set -e
-          ACTUAL_SHA=$(git rev-parse HEAD)
-          if [ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]; then
-            echo "Branch moved since uv.lock was regenerated"
-            echo "  expected: $EXPECTED_SHA"
-            echo "  actual:   $ACTUAL_SHA"
-            echo "Skipping push; Dependabot will re-trigger if needed."
-            exit 0
-          fi
+          # Fetch the current uv.lock blob SHA on the PR branch via
+          # the Contents API — needed for the conditional update.
+          CURRENT_JSON=$(gh api -H "Accept: application/vnd.github+json" \
+            "repos/$REPO/contents/backend/uv.lock?ref=$HEAD_REF")
+          CURRENT_BLOB_SHA=$(echo "$CURRENT_JSON" | jq -r '.sha')
+          CURRENT_CONTENT=$(echo "$CURRENT_JSON" | jq -r '.content' | tr -d '\n' | base64 -d)
 
-          cp artifact-uv-lock/uv.lock backend/uv.lock
-          if [ -z "$(git status --porcelain backend/uv.lock)" ]; then
+          NEW_CONTENT=$(cat artifact-uv-lock/uv.lock)
+          if [ "$NEW_CONTENT" = "$CURRENT_CONTENT" ]; then
             echo "uv.lock unchanged — nothing to commit"
             exit 0
           fi
 
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add backend/uv.lock
-          git commit -m "chore(deps): refresh uv.lock after Dependabot bump"
-          git push
+          # Verify the branch tip still matches the SHA the artifact
+          # was generated against. If the branch moved, abort and let
+          # Dependabot re-trigger; we don't want to clobber a newer
+          # human commit with a stale lockfile.
+          BRANCH_HEAD_SHA=$(gh api -H "Accept: application/vnd.github+json" \
+            "repos/$REPO/branches/$HEAD_REF" --jq '.commit.sha')
+          if [ "$BRANCH_HEAD_SHA" != "$HEAD_SHA" ]; then
+            echo "Branch moved: artifact SHA=$HEAD_SHA, branch=$BRANCH_HEAD_SHA"
+            echo "Skipping push; Dependabot will re-trigger if needed."
+            exit 0
+          fi
+
+          # PUT the new file. base64-encoded content + the existing
+          # blob SHA make this a conditional update — if anything has
+          # changed under us, GitHub returns 409 and we fail rather
+          # than overwrite.
+          NEW_CONTENT_B64=$(base64 < artifact-uv-lock/uv.lock | tr -d '\n')
+          gh api -X PUT -H "Accept: application/vnd.github+json" \
+            "repos/$REPO/contents/backend/uv.lock" \
+            -f message="chore(deps): refresh uv.lock after Dependabot bump" \
+            -f content="$NEW_CONTENT_B64" \
+            -f sha="$CURRENT_BLOB_SHA" \
+            -f branch="$HEAD_REF" \
+            > /dev/null
+          echo "uv.lock committed to $HEAD_REF on PR #$NUMBER"
