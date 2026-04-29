@@ -88,60 +88,43 @@ Land the bumps on the feature branch *before* tagging so master and
 the git tag agree:
 
 ```bash
-# backend/pyproject.toml — set ``version = "X.Y.Z"`` to match the tag
-# you're about to push. Refresh the lockfile so uv.lock stays in sync:
-( cd backend && uv lock --quiet )
-
-# All four host SDK packages must be bumped together — publish-npm.yml
-# fans out to every one on tag push, so a stale version in any of them
-# blocks the release:
-#   packages/host-types/package.json
-#   packages/host-bundle-utils/package.json
-#   packages/test-utils/package.json
-#   packages/create-atrium-host/package.json
-# Set ``"version": "X.Y.Z"`` on each (same number as the backend bump).
-# Refresh the workspace lockfile so its `importers` blocks capture the
-# new versions:
-pnpm install --lockfile-only
+make release-bump V=X.Y.Z
 ```
 
-The intra-workspace deps use `workspace:*`, so the lockfile diff shows
-up only in the `importers:` section — the package versions further
-down don't move. A near-empty `pnpm-lock.yaml` diff is expected, not a
-sign that the bump didn't take.
+That target runs `scripts/bump-version.sh X.Y.Z` (mutates
+`backend/pyproject.toml`, every `packages/*/package.json`,
+`packages/create-atrium-host/src/cli.js`'s `DEFAULT_ATRIUM_VERSION`,
+the host SDK READMEs' `Pin \`^X.Y\`` pin examples, the `--atrium`
+default in the scaffolder's README options table, the bootstrap
+walkthroughs in `docs/new-project/`, the example Dockerfile under
+`examples/hello-world/`, the scaffolder's render-test compose pin,
+and the scaffolder template's override-flag README example), then
+refreshes both lockfiles, then runs `scripts/check-stale-versions.sh
+X.Y.Z` to confirm nothing was missed.
 
-While you're at it, sweep the documentation and the AI bootstrap
-skill for stale version references — both are reader-facing and
-quickly fall behind:
+The four host SDK packages must move in lockstep — publish-npm.yml
+fans out to every one on tag push, so a stale version anywhere blocks
+the release. The bumper handles that.
 
-- `docs/compat-matrix.md` — **add a row** for the release you're
-  about to cut. One row per published `vX.Y.Z`, with the alembic
-  head, any new registry hooks, deprecations, and env / config
-  changes. Cells stay terse; the release notes carry the prose. Use
-  an em-dash for axes that didn't move in this release. The link
-  in the *Atrium* column points at the release you're about to
-  publish (step 9 below).
-- `docs/published-images.md` — anywhere it cites a concrete atrium
-  version ("since 0.X" notes, example pulls).
-- `docs/new-project/README.md` and `docs/new-project/SKILL.md` —
-  any pinned `ghcr.io/.../atrium:X.Y.Z` references in the bootstrap
-  walkthroughs. The SKILL.md is the AI-driveable variant; missing
-  it leaves agents emitting stale tags.
-- `examples/hello-world/` — same sweep for any pinned base-image
-  reference.
-- `packages/host-types/README.md` and
-  `packages/host-bundle-utils/README.md` — `^0.14` style pin
-  examples should match the image's `X.Y` once you cross a minor.
-  The version sweep is otherwise driven by the `package.json`
-  bumps above; the README values are illustrative.
-- `packages/create-atrium-host/src/cli.js` —
-  `DEFAULT_ATRIUM_VERSION` (line ~30). The emitted host's compose
-  + Dockerfile + frontend package.json all pin through it.
-- `packages/create-atrium-host/README.md` — the `--atrium` default
-  call-out in the options table.
+The intra-workspace deps use `workspace:*`, so the `pnpm-lock.yaml`
+diff after a bump shows up only in the `importers:` section — the
+package versions further down don't move. A near-empty diff is
+expected, not a sign that the bump didn't take.
 
-If a doc references an atrium version, it needs updating with each
-release. If it doesn't, it stays untouched.
+`docs/compat-matrix.md` is **not** auto-bumped — it gets a new row
+per release and that row is hand-written. Add the row before
+committing the bump:
+
+- One row per published `vX.Y.Z`, with the alembic head, any new
+  registry hooks, deprecations, and env / config changes. Cells stay
+  terse; the release notes carry the prose. Use an em-dash for axes
+  that didn't move in this release. The link in the *Atrium* column
+  points at the release you're about to publish (step 9 below).
+
+Other docs that legitimately reference past versions (`RELEASING.md`
+prose, `docs/published-images.md` "since 0.X" notes,
+`docs/adr/`) are excluded from the bumper by design — they're
+historical narration, not pins.
 
 ## 2. Branch + commit hygiene
 
@@ -202,23 +185,22 @@ keep it under ~70 chars.
 
 ## 5. Watch CI
 
-Three workflows fire on PR: `CI`, `CodeQL`, `Security`. Find the run
-IDs and watch them with `gh run watch --exit-status` — **never poll
-with `gh run list`**, and don't drop `--exit-status` (bare `watch`
-exits 0 even when the run failed):
+Three workflows fire on PR: `CI`, `CodeQL`, `Security`.
 
 ```bash
-gh run list --branch <branch> --limit 5
-gh run watch <ci-run-id> --exit-status
+make ci-wait BR=<branch>
 ```
 
-Watching `CI` alone is usually enough; `CodeQL` and `Security` finish
-faster and have rarely been the long pole. Confirm overall conclusion
-afterwards:
-
-```bash
-gh run view <ci-run-id> --json conclusion,status -q '{conclusion,status}'
-```
+That target wraps `scripts/wait-ci.sh <branch>` which itself calls
+`scripts/wait-runs.sh <branch> ci.yml codeql.yml security.yml`. It
+resolves each run by branch name, watches it with
+`gh run watch --exit-status`, then re-reads `gh run view --json
+conclusion` because **`gh run watch --exit-status` is not reliable
+on its own** — observed in this repo returning exit 0 for a
+multi-job run that ultimately settled to `conclusion: failure` (the
+watch returned the moment `status` became `completed`, before the
+conclusion was finalised). The wrapper exits non-zero if any
+workflow's final conclusion isn't `success`.
 
 **Doc-only PRs skip CI.** All three PR workflows carry a
 `paths-ignore` filter for `**.md`, `docs/**`, and `LICENCE.md`, so a
@@ -289,10 +271,13 @@ The tag push fires two workflows in parallel:
   the exact commit + workflow run.
 
 ```bash
-gh run list --workflow=publish-images.yml --limit 3
-gh run list --workflow=publish-npm.yml --limit 3
-gh run watch <publish-run-id> --exit-status
+make release-wait V=<X.Y.Z>
 ```
+
+That target wraps `scripts/wait-publish.sh v<X.Y.Z>` — resolves both
+runs by tag, watches them serially with `gh run watch --exit-status`,
+prints a one-line summary, and exits non-zero if either failed. One
+foreground bash call instead of two parallel `gh run watch`s.
 
 A non-zero exit on either means the corresponding artifact isn't
 published — don't create the GitHub release until both are green,
@@ -331,17 +316,36 @@ Structure (match the v0.11.2 / v0.11.3 reference):
   the auto-uptake and fully-pinned forms. Call out migrations / env
   changes / breaking changes here, even if they're "none".
 
+Render the working draft from the stencil:
+
+```bash
+make release-notes V=<X.Y.Z>
+```
+
+That writes `.context/release-notes-v<X.Y.Z>.md` (gitignored), built
+from `.github/RELEASE_NOTES_TEMPLATE.md` with `{{VERSION}}`,
+`{{MINOR}}`, `{{MAJOR}}`, `{{PREV_VERSION}}` substituted. It also
+pre-stubs one `## <issue title> — closes #N` section per `closes
+#N` (or `fixes #N` / `resolves #N`) referenced in commits since the
+previous `v*` tag, with the issue title pulled from the GitHub issue.
+
+Edit the prose by hand:
+
+- Write the **Highlights** paragraph (1 paragraph, non-engineer
+  audience, what shipped + motivation + what's NOT in scope).
+- Fill in each per-issue section: user-visible behaviour first, then
+  technical detail, then code blocks for any new API surface.
+- Delete sections that don't apply (e.g. **Documentation** if nothing
+  in `docs/` moved this release).
+- If the alembic head moved or env vars changed, add the
+  corresponding paragraph to **Upgrading from v\<previous\>**.
+
 Then create the release:
 
 ```bash
 gh release create v<X.Y.Z> \
   --title "v<X.Y.Z> — <headline>" \
-  --notes "$(cat <<'EOF'
-## Highlights
-
-...
-EOF
-)"
+  --notes-file .context/release-notes-v<X.Y.Z>.md
 ```
 
 Pre-releases use `--prerelease`; mainline releases don't need any

@@ -4,6 +4,7 @@
 .PHONY: help up down logs ps build rebuild migrate migration \
         seed-admin seed-super-admin dev-bootstrap \
         shell-api shell-db test test-backend test-frontend lint format \
+        release-bump release-wait release-notes ci-wait \
         clean clean-atrium prod-build prod-up prod-down \
         smoke smoke-extended smoke-dev smoke-up smoke-down \
         smoke-hello smoke-hello-dev smoke-hello-down smoke-hello-ghcr \
@@ -61,6 +62,23 @@ help:
 	@echo "  make test-frontend      vitest (unit). Playwright lives in make smoke."
 	@echo "  make lint               ruff + eslint"
 	@echo "  make format             ruff format + prettier"
+	@echo ""
+	@echo "  make release-bump V=X.Y.Z"
+	@echo "                          Bump every version pin in lockstep, refresh"
+	@echo "                          lockfiles, check for stale references."
+	@echo "                          See RELEASING.md step 1.5."
+	@echo "  make release-wait V=X.Y.Z"
+	@echo "                          Block until publish-images.yml + publish-npm.yml"
+	@echo "                          finish for the v\$$(V) tag. See step 8."
+	@echo "  make ci-wait BR=<branch>"
+	@echo "                          Block until ci.yml + codeql.yml + security.yml"
+	@echo "                          finish for the named PR branch. Pre-merge sibling"
+	@echo "                          of release-wait."
+	@echo "  make release-notes V=X.Y.Z"
+	@echo "                          Render .github/RELEASE_NOTES_TEMPLATE.md to"
+	@echo "                          .context/release-notes-v\$$(V).md, pre-stubbed"
+	@echo "                          with sections for each \`closes #N\` since the"
+	@echo "                          previous tag. See step 9."
 	@echo ""
 	@echo "  make prod-build         Build prod images"
 	@echo "  make prod-up            Start prod stack"
@@ -255,6 +273,63 @@ lint:
 format:
 	cd backend && uv run ruff format .
 	cd frontend && pnpm format
+
+# --- Release ---
+#
+# The mechanical parts of cutting a release (version bumps + lockfile
+# refresh + doc sweep + release-notes scaffold) all live in scripts/.
+# These targets are thin wrappers so the maintainer flow is:
+#
+#   make release-bump V=0.16.0   # mutate the tree
+#   git diff                     # eyeball
+#   git add … && git commit
+#   git push -u origin <branch>
+#   gh pr create … && gh pr merge --squash
+#   git tag -s vX.Y.Z <sha> && git push origin vX.Y.Z
+#   make release-wait V=0.16.0   # block on publish-images + publish-npm
+#   make release-notes V=0.16.0  # write .context/release-notes-vX.Y.Z.md
+#   gh release create vX.Y.Z --notes-file .context/…
+#
+# See RELEASING.md for the full procedure (this captures step 1.5 + 8 + 9).
+
+# Bump every version pin in lockstep, refresh both lockfiles, then verify
+# nothing stale is left. Idempotent — re-running with the same V is safe.
+release-bump:
+	@test -n "$(V)" || (echo "Usage: make release-bump V=X.Y.Z"; exit 64)
+	./scripts/bump-version.sh $(V)
+	cd backend && uv lock --quiet
+	pnpm install --lockfile-only
+	./scripts/check-stale-versions.sh $(V)
+	@echo
+	@echo "Bumped to $(V). Next:"
+	@echo "  - add a row to docs/compat-matrix.md"
+	@echo "  - git diff           # review"
+	@echo "  - git add … && git commit"
+
+# Block until both publish-images.yml and publish-npm.yml finish for
+# the named tag. Replaces the dance of two parallel ``gh run watch``.
+# Exits non-zero if either workflow failed; safe to re-run.
+release-wait:
+	@test -n "$(V)" || (echo "Usage: make release-wait V=X.Y.Z"; exit 64)
+	./scripts/wait-publish.sh v$(V)
+
+# Block until the pre-merge CI workflows (ci.yml, codeql.yml,
+# security.yml) finish for the named branch. Same exit-status
+# semantics as release-wait, sharing the underlying wait-runs.sh.
+# Symmetric with release-wait — pre-merge is to PR what
+# post-tag is to publish.
+ci-wait:
+	@test -n "$(BR)" || (echo "Usage: make ci-wait BR=<branch-name>"; exit 64)
+	./scripts/wait-ci.sh $(BR)
+
+# Render .github/RELEASE_NOTES_TEMPLATE.md with the current version's
+# substitutions and pre-stub one section per ``closes #N`` referenced
+# in commits since the previous tag. Writes to .context/ (gitignored)
+# so the maintainer fills in the per-issue prose, then passes the file
+# to ``gh release create --notes-file``.
+release-notes:
+	@test -n "$(V)" || (echo "Usage: make release-notes V=X.Y.Z"; exit 64)
+	./scripts/release-notes.sh v$(V)
 
 clean:
 	$(COMPOSE_DEV) down -v --remove-orphans
