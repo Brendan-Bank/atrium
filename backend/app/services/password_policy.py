@@ -92,7 +92,14 @@ async def _hibp_suffixes_for_prefix(prefix: str) -> set[str] | None:
 
 
 async def _password_is_breached(password: str) -> bool:
-    digest = hashlib.sha1(password.encode("utf-8"), usedforsecurity=False).hexdigest().upper()
+    # SHA-1 is the API contract, not a password storage choice — HIBP's
+    # k-anonymity range endpoint accepts only the first 5 hex chars of a
+    # SHA-1 digest. The hash never leaves this process; the prefix is
+    # what we send. ``usedforsecurity=False`` documents intent and
+    # silences SAST tools that flag SHA-1 unconditionally.
+    digest = hashlib.sha1(  # lgtm[py/weak-sensitive-data-hashing] noqa: S324
+        password.encode("utf-8"), usedforsecurity=False
+    ).hexdigest().upper()
     prefix, suffix = digest[:5], digest[5:]
     suffixes = await _hibp_suffixes_for_prefix(prefix)
     if suffixes is None:

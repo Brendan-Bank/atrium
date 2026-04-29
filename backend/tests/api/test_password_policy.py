@@ -199,7 +199,11 @@ async def test_hibp_breached_password_rejected(client, engine, monkeypatch):
     from app.services import password_policy as pp
 
     password = "needs-to-be-long-enough"
-    digest = hashlib.sha1(password.encode("utf-8")).hexdigest().upper()
+    # SHA-1 mirrors the HIBP range-API contract under test, not a
+    # password storage hash. See _password_is_breached() docstring.
+    digest = hashlib.sha1(  # lgtm[py/weak-sensitive-data-hashing] noqa: S324
+        password.encode("utf-8"), usedforsecurity=False
+    ).hexdigest().upper()
     suffix = digest[5:]
 
     async def _fake_fetch(prefix: str) -> set[str]:
