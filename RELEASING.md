@@ -185,23 +185,22 @@ keep it under ~70 chars.
 
 ## 5. Watch CI
 
-Three workflows fire on PR: `CI`, `CodeQL`, `Security`. Find the run
-IDs and watch them with `gh run watch --exit-status` — **never poll
-with `gh run list`**, and don't drop `--exit-status` (bare `watch`
-exits 0 even when the run failed):
+Three workflows fire on PR: `CI`, `CodeQL`, `Security`.
 
 ```bash
-gh run list --branch <branch> --limit 5
-gh run watch <ci-run-id> --exit-status
+make ci-wait BR=<branch>
 ```
 
-Watching `CI` alone is usually enough; `CodeQL` and `Security` finish
-faster and have rarely been the long pole. Confirm overall conclusion
-afterwards:
-
-```bash
-gh run view <ci-run-id> --json conclusion,status -q '{conclusion,status}'
-```
+That target wraps `scripts/wait-ci.sh <branch>` which itself calls
+`scripts/wait-runs.sh <branch> ci.yml codeql.yml security.yml`. It
+resolves each run by branch name, watches it with
+`gh run watch --exit-status`, then re-reads `gh run view --json
+conclusion` because **`gh run watch --exit-status` is not reliable
+on its own** — observed in this repo returning exit 0 for a
+multi-job run that ultimately settled to `conclusion: failure` (the
+watch returned the moment `status` became `completed`, before the
+conclusion was finalised). The wrapper exits non-zero if any
+workflow's final conclusion isn't `success`.
 
 **Doc-only PRs skip CI.** All three PR workflows carry a
 `paths-ignore` filter for `**.md`, `docs/**`, and `LICENCE.md`, so a

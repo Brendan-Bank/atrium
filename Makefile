@@ -4,7 +4,7 @@
 .PHONY: help up down logs ps build rebuild migrate migration \
         seed-admin seed-super-admin dev-bootstrap \
         shell-api shell-db test test-backend test-frontend lint format \
-        release-bump release-wait release-notes \
+        release-bump release-wait release-notes ci-wait \
         clean clean-atrium prod-build prod-up prod-down \
         smoke smoke-extended smoke-dev smoke-up smoke-down \
         smoke-hello smoke-hello-dev smoke-hello-down smoke-hello-ghcr \
@@ -70,6 +70,10 @@ help:
 	@echo "  make release-wait V=X.Y.Z"
 	@echo "                          Block until publish-images.yml + publish-npm.yml"
 	@echo "                          finish for the v\$$(V) tag. See step 8."
+	@echo "  make ci-wait BR=<branch>"
+	@echo "                          Block until ci.yml + codeql.yml + security.yml"
+	@echo "                          finish for the named PR branch. Pre-merge sibling"
+	@echo "                          of release-wait."
 	@echo "  make release-notes V=X.Y.Z"
 	@echo "                          Render .github/RELEASE_NOTES_TEMPLATE.md to"
 	@echo "                          .context/release-notes-v\$$(V).md, pre-stubbed"
@@ -308,6 +312,15 @@ release-bump:
 release-wait:
 	@test -n "$(V)" || (echo "Usage: make release-wait V=X.Y.Z"; exit 64)
 	./scripts/wait-publish.sh v$(V)
+
+# Block until the pre-merge CI workflows (ci.yml, codeql.yml,
+# security.yml) finish for the named branch. Same exit-status
+# semantics as release-wait, sharing the underlying wait-runs.sh.
+# Symmetric with release-wait — pre-merge is to PR what
+# post-tag is to publish.
+ci-wait:
+	@test -n "$(BR)" || (echo "Usage: make ci-wait BR=<branch-name>"; exit 64)
+	./scripts/wait-ci.sh $(BR)
 
 # Render .github/RELEASE_NOTES_TEMPLATE.md with the current version's
 # substitutions and pre-stub one section per ``closes #N`` referenced
