@@ -95,11 +95,15 @@ for f in docs/new-project/README.md \
 done
 
 # ---- packages/create-atrium-host: scaffolder fixtures ---------------------
-# The render-test asserts the emitted compose contains the current
-# minor pin (the template uses ``__ATRIUM_VERSION__`` placeholder
-# which the scaffolder substitutes). The template README has an
-# illustrative full-version example for the override flag.
-perl -i -pe "s{atrium:[0-9]+\\.[0-9]+(?=['\"])}{atrium:$MINOR}g" \
+# The render-test renders templates against an ``ATRIUM_VERSION``
+# fixture and asserts the resulting compose contains ``atrium:<minor>``.
+# Both the input fixture and the assertion must move in lockstep —
+# missing the fixture and bumping only the assertion makes the test
+# fail (rendered output uses the old minor; assertion expects the
+# new one). The template README has an illustrative full-version
+# example for the override flag.
+perl -i -pe "s{atrium:[0-9]+\\.[0-9]+(?=['\"])}{atrium:$MINOR}g; \
+            s{ATRIUM_VERSION: '[0-9]+\\.[0-9]+'}{ATRIUM_VERSION: '$MINOR'}g" \
   packages/create-atrium-host/test/render.test.js
 perl -i -pe "s{atrium:[0-9]+\\.[0-9]+\\.[0-9]+ make build}{atrium:$VERSION make build}g" \
   packages/create-atrium-host/template/README.md

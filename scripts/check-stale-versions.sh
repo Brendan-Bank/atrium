@@ -98,6 +98,10 @@ emit "scaffolder render-test compose pin" "$SCAFFOLDER_TEST" \
      'atrium:0\.[0-9]+' \
      "atrium:$MINOR"
 
+emit "scaffolder render-test ATRIUM_VERSION fixture" "$SCAFFOLDER_TEST" \
+     "ATRIUM_VERSION: '0\.[0-9]+'" \
+     "ATRIUM_VERSION: '$MINOR'"
+
 emit "scaffolder template README override example" "$SCAFFOLDER_TEMPLATE_README" \
      'atrium:0\.[0-9]+\.[0-9]+' \
      "atrium:$VERSION"

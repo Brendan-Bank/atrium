@@ -40,7 +40,7 @@ describe('renderTemplate', () => {
           BRAND_NAME: 'Test Host',
           BRAND_PASCAL: 'TestHost',
           BRAND_PRIMARY: 'blue',
-          ATRIUM_VERSION: '0.15',
+          ATRIUM_VERSION: '0.16',
         },
       });
 
@@ -98,7 +98,7 @@ describe('renderTemplate', () => {
           BRAND_NAME: 'Casa del Leone',
           BRAND_PASCAL: 'CasaDelLeone',
           BRAND_PRIMARY: 'teal',
-          ATRIUM_VERSION: '0.15',
+          ATRIUM_VERSION: '0.16',
         },
       });
 
