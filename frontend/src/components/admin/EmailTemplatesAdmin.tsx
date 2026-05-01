@@ -15,6 +15,7 @@ import {
   TextInput,
   Title,
 } from '@mantine/core';
+import { useMediaQuery } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { IconEdit } from '@tabler/icons-react';
 import { useTranslation } from 'react-i18next';
@@ -203,66 +204,112 @@ export function EmailTemplatesAdmin() {
   const { data: appConfig } = useAppConfig();
   const enabledLocales = appConfig?.i18n?.enabled_locales ?? FALLBACK_LOCALES;
   const [editing, setEditing] = useState<GroupedTemplate | null>(null);
+  const isMobile =
+    useMediaQuery('(max-width: 48em)', false, { getInitialValueInEffect: false });
 
   const grouped = useMemo(() => groupByKey(templates), [templates]);
 
   return (
     <Stack>
       <Title order={3}>{t('emailTemplates.title')}</Title>
-      <Paper withBorder>
-        <Table.ScrollContainer minWidth={720}>
-          <Table verticalSpacing="sm">
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>{t('emailTemplates.key')}</Table.Th>
-                <Table.Th>{t('emailTemplates.subject')}</Table.Th>
-                <Table.Th>{t('emailTemplates.description')}</Table.Th>
-                <Table.Th>{t('emailTemplates.locales')}</Table.Th>
-                <Table.Th w={60}></Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {isLoading && (
-                <Table.Tr>
-                  <Table.Td colSpan={5}>
-                    <Text c="dimmed">{t('common.loading')}</Text>
-                  </Table.Td>
-                </Table.Tr>
-              )}
-              {grouped.map((tpl) => (
-                <Table.Tr key={tpl.key}>
-                  <Table.Td style={{ whiteSpace: 'nowrap' }}>
-                    <Text ff="monospace" size="sm">
-                      {tpl.key}
+      {isMobile ? (
+        <Stack gap="xs">
+          {isLoading && <Text c="dimmed">{t('common.loading')}</Text>}
+          {grouped.map((tpl) => (
+            <Paper key={tpl.key} withBorder p="sm" data-mobile-card>
+              <Stack gap={6}>
+                <Group justify="space-between" wrap="nowrap" gap="xs">
+                  <Text ff="monospace" size="sm" style={{ wordBreak: 'break-all' }}>
+                    {tpl.key}
+                  </Text>
+                  <ActionIcon variant="subtle" onClick={() => setEditing(tpl)}>
+                    <IconEdit size={14} />
+                  </ActionIcon>
+                </Group>
+                <Group gap={6} wrap="nowrap" align="baseline">
+                  <Text size="xs" c="dimmed" style={{ minWidth: 80 }}>
+                    {t('emailTemplates.subject')}
+                  </Text>
+                  <Text size="sm">{tpl.defaultSubject}</Text>
+                </Group>
+                {tpl.description && (
+                  <Group gap={6} wrap="nowrap" align="baseline">
+                    <Text size="xs" c="dimmed" style={{ minWidth: 80 }}>
+                      {t('emailTemplates.description')}
                     </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="sm">{tpl.defaultSubject}</Text>
-                  </Table.Td>
-                  <Table.Td>
                     <Text size="sm" c="dimmed">
-                      {tpl.description ?? ''}
+                      {tpl.description}
                     </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="sm" ff="monospace" c="dimmed">
-                      {tpl.locales.sort().join(', ')}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <ActionIcon
-                      variant="subtle"
-                      onClick={() => setEditing(tpl)}
-                    >
-                      <IconEdit size={14} />
-                    </ActionIcon>
-                  </Table.Td>
+                  </Group>
+                )}
+                <Group gap={6} wrap="nowrap" align="baseline">
+                  <Text size="xs" c="dimmed" style={{ minWidth: 80 }}>
+                    {t('emailTemplates.locales')}
+                  </Text>
+                  <Text size="sm" ff="monospace" c="dimmed">
+                    {tpl.locales.sort().join(', ')}
+                  </Text>
+                </Group>
+              </Stack>
+            </Paper>
+          ))}
+        </Stack>
+      ) : (
+        <Paper withBorder>
+          <Table.ScrollContainer minWidth={720}>
+            <Table verticalSpacing="sm">
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>{t('emailTemplates.key')}</Table.Th>
+                  <Table.Th>{t('emailTemplates.subject')}</Table.Th>
+                  <Table.Th>{t('emailTemplates.description')}</Table.Th>
+                  <Table.Th>{t('emailTemplates.locales')}</Table.Th>
+                  <Table.Th w={60}></Table.Th>
                 </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-        </Table.ScrollContainer>
-      </Paper>
+              </Table.Thead>
+              <Table.Tbody>
+                {isLoading && (
+                  <Table.Tr>
+                    <Table.Td colSpan={5}>
+                      <Text c="dimmed">{t('common.loading')}</Text>
+                    </Table.Td>
+                  </Table.Tr>
+                )}
+                {grouped.map((tpl) => (
+                  <Table.Tr key={tpl.key}>
+                    <Table.Td style={{ whiteSpace: 'nowrap' }}>
+                      <Text ff="monospace" size="sm">
+                        {tpl.key}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="sm">{tpl.defaultSubject}</Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="sm" c="dimmed">
+                        {tpl.description ?? ''}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="sm" ff="monospace" c="dimmed">
+                        {tpl.locales.sort().join(', ')}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <ActionIcon
+                        variant="subtle"
+                        onClick={() => setEditing(tpl)}
+                      >
+                        <IconEdit size={14} />
+                      </ActionIcon>
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+        </Paper>
+      )}
       <EditTemplateModal
         // Force a full remount whenever a different template is
         // picked. The modal's locale state then resets to the first

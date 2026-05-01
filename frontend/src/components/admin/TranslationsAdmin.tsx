@@ -14,6 +14,7 @@ import {
   TextInput,
   Title,
 } from '@mantine/core';
+import { useMediaQuery } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { useTranslation } from 'react-i18next';
 
@@ -72,6 +73,8 @@ export function TranslationsAdmin() {
     initial.enabled_locales?.[0] ?? 'en',
   );
   const [search, setSearch] = useState('');
+  const isMobile =
+    useMediaQuery('(max-width: 48em)', false, { getInitialValueInEffect: false });
 
   useEffect(() => {
     if (!data?.i18n) return;
@@ -185,56 +188,86 @@ export function TranslationsAdmin() {
             />
           </Group>
 
-          <Table.ScrollContainer minWidth={720}>
-            <Table verticalSpacing="xs" striped>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th style={{ width: '28%' }}>
-                    {t('translations.key')}
-                  </Table.Th>
-                  <Table.Th style={{ width: '36%' }}>
-                    {t('translations.default')}
-                  </Table.Th>
-                  <Table.Th>{t('translations.override')}</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {filteredKeys.length === 0 && (
+          {isMobile ? (
+            <Stack gap="xs">
+              {filteredKeys.length === 0 && (
+                <Text c="dimmed" size="sm">
+                  {t('translations.noKeys')}
+                </Text>
+              )}
+              {filteredKeys.map((key) => (
+                <Paper key={key} withBorder p="sm" data-mobile-card>
+                  <Stack gap={6}>
+                    <Text ff="monospace" size="xs" style={{ wordBreak: 'break-all' }}>
+                      {key}
+                    </Text>
+                    <Text size="sm" c="dimmed">
+                      {FLAT_EN[key]}
+                    </Text>
+                    <TextInput
+                      size="xs"
+                      value={localeOverrides[key] ?? ''}
+                      onChange={(e) =>
+                        setOverride(activeLocale, key, e.currentTarget.value)
+                      }
+                      placeholder={FLAT_EN[key]}
+                    />
+                  </Stack>
+                </Paper>
+              ))}
+            </Stack>
+          ) : (
+            <Table.ScrollContainer minWidth={720}>
+              <Table verticalSpacing="xs" striped>
+                <Table.Thead>
                   <Table.Tr>
-                    <Table.Td colSpan={3}>
-                      <Text c="dimmed" size="sm">
-                        {t('translations.noKeys')}
-                      </Text>
-                    </Table.Td>
+                    <Table.Th style={{ width: '28%' }}>
+                      {t('translations.key')}
+                    </Table.Th>
+                    <Table.Th style={{ width: '36%' }}>
+                      {t('translations.default')}
+                    </Table.Th>
+                    <Table.Th>{t('translations.override')}</Table.Th>
                   </Table.Tr>
-                )}
-                {filteredKeys.map((key) => (
-                  <Table.Tr key={key}>
-                    <Table.Td>
-                      <Text ff="monospace" size="xs">
-                        {key}
-                      </Text>
-                    </Table.Td>
-                    <Table.Td>
-                      <Text size="sm" c="dimmed">
-                        {FLAT_EN[key]}
-                      </Text>
-                    </Table.Td>
-                    <Table.Td>
-                      <TextInput
-                        size="xs"
-                        value={localeOverrides[key] ?? ''}
-                        onChange={(e) =>
-                          setOverride(activeLocale, key, e.currentTarget.value)
-                        }
-                        placeholder={FLAT_EN[key]}
-                      />
-                    </Table.Td>
-                  </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
-          </Table.ScrollContainer>
+                </Table.Thead>
+                <Table.Tbody>
+                  {filteredKeys.length === 0 && (
+                    <Table.Tr>
+                      <Table.Td colSpan={3}>
+                        <Text c="dimmed" size="sm">
+                          {t('translations.noKeys')}
+                        </Text>
+                      </Table.Td>
+                    </Table.Tr>
+                  )}
+                  {filteredKeys.map((key) => (
+                    <Table.Tr key={key}>
+                      <Table.Td>
+                        <Text ff="monospace" size="xs">
+                          {key}
+                        </Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <Text size="sm" c="dimmed">
+                          {FLAT_EN[key]}
+                        </Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <TextInput
+                          size="xs"
+                          value={localeOverrides[key] ?? ''}
+                          onChange={(e) =>
+                            setOverride(activeLocale, key, e.currentTarget.value)
+                          }
+                          placeholder={FLAT_EN[key]}
+                        />
+                      </Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+            </Table.ScrollContainer>
+          )}
 
           <Group justify="flex-end">
             <Button onClick={submit} loading={update.isPending} disabled={isLoading}>
