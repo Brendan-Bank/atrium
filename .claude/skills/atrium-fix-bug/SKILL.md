@@ -154,6 +154,31 @@ For anything touching auth / app shell / login / admin sidebar:
 make smoke
 ```
 
+The smoke stack serves the **built** SPA from the api image, not Vite
+dev. After any frontend change you must rebuild the api before smoke
+will see it:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.e2e.yml \
+    up -d --build --force-recreate api
+```
+
+`make smoke-up` does this on first boot, but a subsequent re-run only
+rebuilds if the Dockerfile context changed — bind-mounted source
+edits don't propagate into the built bundle without an explicit
+`--build`.
+
+To run a single Playwright spec while iterating, **use `--grep`, not
+the filename argument** — passing the filename still runs the whole
+project and is slow:
+
+```sh
+cd frontend && E2E_BASE_URL=http://localhost:8000 \
+    E2E_ADMIN_EMAIL=admin@example.com E2E_ADMIN_PASSWORD=smoke-pw-12345 \
+    E2E_ADMIN_TOTP_SECRET=JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP \
+    pnpm playwright test --grep "<test title or regex>" --project=extended
+```
+
 Use `make ci-wait` / `make release-wait` to watch CI rather than `gh run
 watch --exit-status` — the wrappers re-check `gh run view` because the
 plain command can return 0 on a failed multi-job run.
@@ -191,6 +216,12 @@ plain command can return 0 on a failed multi-job run.
   height, wrap the children in `<AppShell.Section grow component={ScrollArea}>`
   per the Mantine AppShell docs. iOS Safari's collapsing toolbar makes
   `100vh` overshoot, so combine with `100dvh` on any height containers.
+- **Navbar selector in tests**: Mantine v9's `<AppShell.Navbar>` renders
+  as `<nav role="navigation">`, not `<aside>`. Scope navbar-specific
+  Playwright assertions with `page.getByRole('navigation')`.
+- **Mantine `<Burger>` has no default accessible name**. If you need
+  to click it from a Playwright spec, pass `aria-label={t('nav.toggle')}`
+  on the component first and run the test against that label.
 - **Global overscroll**: iOS Safari rubber-bands the document by default
   and the dynamic toolbar adds further jump. Set
   `overscroll-behavior-y: none` on `html, body` in the root CSS to stop
