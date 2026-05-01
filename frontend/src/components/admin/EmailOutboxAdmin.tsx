@@ -16,6 +16,7 @@ import {
   Title,
   Tooltip,
 } from '@mantine/core';
+import { useMediaQuery } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { IconSend } from '@tabler/icons-react';
 import { useTranslation } from 'react-i18next';
@@ -50,6 +51,8 @@ export function EmailOutboxAdmin() {
     'pending',
   );
   const [page, setPage] = useState(1);
+  const isMobile =
+    useMediaQuery('(max-width: 48em)', false, { getInitialValueInEffect: false });
 
   const { data, isLoading } = useEmailOutbox({
     status: statusFilter === 'all' ? null : statusFilter,
@@ -61,7 +64,7 @@ export function EmailOutboxAdmin() {
 
   return (
     <Stack>
-      <Group justify="space-between" align="flex-end">
+      <Group justify="space-between" align="flex-end" wrap="wrap">
         <Title order={3}>{t('emailOutbox.title')}</Title>
         <SegmentedControl
           size="xs"
@@ -77,42 +80,52 @@ export function EmailOutboxAdmin() {
         />
       </Group>
 
-      <Paper withBorder>
-        <Table.ScrollContainer minWidth={760}>
-          <Table verticalSpacing="sm" highlightOnHover>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>{t('emailOutbox.template')}</Table.Th>
-                <Table.Th>{t('emailOutbox.toAddr')}</Table.Th>
-                <Table.Th>{t('emailOutbox.locale')}</Table.Th>
-                <Table.Th>{t('emailOutbox.status')}</Table.Th>
-                <Table.Th>{t('emailOutbox.attempts')}</Table.Th>
-                <Table.Th>{t('emailOutbox.nextAttempt')}</Table.Th>
-                <Table.Th w={80} />
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {isLoading && (
+      {isMobile ? (
+        <Stack gap="xs">
+          {isLoading && <Text c="dimmed">{t('common.loading')}</Text>}
+          {!isLoading && (data?.items.length ?? 0) === 0 && (
+            <Text c="dimmed">{t('emailOutbox.empty')}</Text>
+          )}
+          {data?.items.map((row) => <OutboxRow key={row.id} row={row} mobile />)}
+        </Stack>
+      ) : (
+        <Paper withBorder>
+          <Table.ScrollContainer minWidth={760}>
+            <Table verticalSpacing="sm" highlightOnHover>
+              <Table.Thead>
                 <Table.Tr>
-                  <Table.Td colSpan={7}>
-                    <Text c="dimmed">{t('common.loading')}</Text>
-                  </Table.Td>
+                  <Table.Th>{t('emailOutbox.template')}</Table.Th>
+                  <Table.Th>{t('emailOutbox.toAddr')}</Table.Th>
+                  <Table.Th>{t('emailOutbox.locale')}</Table.Th>
+                  <Table.Th>{t('emailOutbox.status')}</Table.Th>
+                  <Table.Th>{t('emailOutbox.attempts')}</Table.Th>
+                  <Table.Th>{t('emailOutbox.nextAttempt')}</Table.Th>
+                  <Table.Th w={80} />
                 </Table.Tr>
-              )}
-              {!isLoading && (data?.items.length ?? 0) === 0 && (
-                <Table.Tr>
-                  <Table.Td colSpan={7}>
-                    <Text c="dimmed">{t('emailOutbox.empty')}</Text>
-                  </Table.Td>
-                </Table.Tr>
-              )}
-              {data?.items.map((row) => (
-                <OutboxRow key={row.id} row={row} />
-              ))}
-            </Table.Tbody>
-          </Table>
-        </Table.ScrollContainer>
-      </Paper>
+              </Table.Thead>
+              <Table.Tbody>
+                {isLoading && (
+                  <Table.Tr>
+                    <Table.Td colSpan={7}>
+                      <Text c="dimmed">{t('common.loading')}</Text>
+                    </Table.Td>
+                  </Table.Tr>
+                )}
+                {!isLoading && (data?.items.length ?? 0) === 0 && (
+                  <Table.Tr>
+                    <Table.Td colSpan={7}>
+                      <Text c="dimmed">{t('emailOutbox.empty')}</Text>
+                    </Table.Td>
+                  </Table.Tr>
+                )}
+                {data?.items.map((row) => (
+                  <OutboxRow key={row.id} row={row} />
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+        </Paper>
+      )}
 
       {data && data.total > PAGE_SIZE && (
         <Group justify="center">
@@ -123,7 +136,7 @@ export function EmailOutboxAdmin() {
   );
 }
 
-function OutboxRow({ row }: { row: EmailOutboxRow }) {
+function OutboxRow({ row, mobile }: { row: EmailOutboxRow; mobile?: boolean }) {
   const { t } = useTranslation();
   const drain = useDrainOutboxRow();
   const nextAttempt = new Date(
@@ -159,6 +172,83 @@ function OutboxRow({ row }: { row: EmailOutboxRow }) {
     }
   };
 
+  const drainButton = (
+    <Tooltip
+      label={
+        canDrain
+          ? t('emailOutbox.drainTooltip')
+          : t('emailOutbox.drainDisabledTooltip')
+      }
+    >
+      <span>
+        <Button
+          size="xs"
+          variant="light"
+          leftSection={<IconSend size={12} />}
+          disabled={!canDrain}
+          loading={drain.isPending && drain.variables === row.id}
+          onClick={onDrain}
+        >
+          {t('emailOutbox.drainAction')}
+        </Button>
+      </span>
+    </Tooltip>
+  );
+
+  if (mobile) {
+    return (
+      <Paper withBorder p="sm" data-mobile-card>
+        <Stack gap={6}>
+          <Group justify="space-between" wrap="nowrap" gap="xs">
+            <Text ff="monospace" size="sm" style={{ wordBreak: 'break-all' }}>
+              {row.template}
+            </Text>
+            <Badge color={STATUS_COLORS[row.status]} variant="light" size="sm">
+              {row.status}
+            </Badge>
+          </Group>
+          <Group gap={6} wrap="nowrap" align="baseline">
+            <Text size="xs" c="dimmed" style={{ minWidth: 80 }}>
+              {t('emailOutbox.toAddr')}
+            </Text>
+            <Text size="sm" style={{ wordBreak: 'break-all' }}>
+              {row.to_addr}
+            </Text>
+          </Group>
+          <Group gap={6} wrap="nowrap" align="baseline">
+            <Text size="xs" c="dimmed" style={{ minWidth: 80 }}>
+              {t('emailOutbox.locale')}
+            </Text>
+            <Text size="sm" ff="monospace" c="dimmed">
+              {row.locale}
+            </Text>
+          </Group>
+          <Group gap={6} wrap="nowrap" align="baseline">
+            <Text size="xs" c="dimmed" style={{ minWidth: 80 }}>
+              {t('emailOutbox.attempts')}
+            </Text>
+            <Text size="sm">{row.attempts}</Text>
+          </Group>
+          <Group gap={6} wrap="nowrap" align="baseline">
+            <Text size="xs" c="dimmed" style={{ minWidth: 80 }}>
+              {t('emailOutbox.nextAttempt')}
+            </Text>
+            <Text size="xs">{nextAttempt.toLocaleString()}</Text>
+          </Group>
+          {row.last_error && (
+            <Code
+              block
+              style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontSize: 11 }}
+            >
+              {row.last_error}
+            </Code>
+          )}
+          <Group justify="flex-end">{drainButton}</Group>
+        </Stack>
+      </Paper>
+    );
+  }
+
   return (
     <>
       <Table.Tr>
@@ -186,28 +276,7 @@ function OutboxRow({ row }: { row: EmailOutboxRow }) {
         <Table.Td>
           <Text size="xs">{nextAttempt.toLocaleString()}</Text>
         </Table.Td>
-        <Table.Td>
-          <Tooltip
-            label={
-              canDrain
-                ? t('emailOutbox.drainTooltip')
-                : t('emailOutbox.drainDisabledTooltip')
-            }
-          >
-            <span>
-              <Button
-                size="xs"
-                variant="light"
-                leftSection={<IconSend size={12} />}
-                disabled={!canDrain}
-                loading={drain.isPending && drain.variables === row.id}
-                onClick={onDrain}
-              >
-                {t('emailOutbox.drainAction')}
-              </Button>
-            </span>
-          </Tooltip>
-        </Table.Td>
+        <Table.Td>{drainButton}</Table.Td>
       </Table.Tr>
       {row.last_error && (
         <Table.Tr>

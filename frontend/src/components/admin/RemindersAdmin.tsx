@@ -19,6 +19,7 @@ import {
   Title,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
+import { useMediaQuery } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { IconEdit, IconPlus, IconTrash } from '@tabler/icons-react';
 import { useTranslation } from 'react-i18next';
@@ -175,6 +176,14 @@ export function RemindersAdmin() {
   const delRule = useDeleteReminderRule();
   const [editing, setEditing] = useState<ReminderRule | null>(null);
   const [newOpen, setNewOpen] = useState(false);
+  const isMobile =
+    useMediaQuery('(max-width: 48em)', false, { getInitialValueInEffect: false });
+
+  const confirmDelete = (r: ReminderRule) => {
+    if (window.confirm(t('reminders.confirmDelete', { name: r.name }))) {
+      delRule.mutate(r.id);
+    }
+  };
 
   return (
     <Stack>
@@ -188,73 +197,124 @@ export function RemindersAdmin() {
         </Button>
       </Group>
 
-      <Paper withBorder>
-        <Table.ScrollContainer minWidth={760}>
-        <Table verticalSpacing="sm" style={{ whiteSpace: 'nowrap' }}>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>{t('reminders.name')}</Table.Th>
-              <Table.Th>{t('reminders.template')}</Table.Th>
-              <Table.Th>{t('reminders.anchor')}</Table.Th>
-              <Table.Th>{t('reminders.daysOffset')}</Table.Th>
-              <Table.Th>{t('reminders.active')}</Table.Th>
-              <Table.Th w={80}></Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {isLoading && (
-              <Table.Tr>
-                <Table.Td colSpan={6}>
-                  <Text c="dimmed">{t('common.loading')}</Text>
-                </Table.Td>
-              </Table.Tr>
-            )}
-            {rules.map((r) => (
-              <Table.Tr key={r.id}>
-                <Table.Td>{r.name}</Table.Td>
-                <Table.Td>
-                  <Text ff="monospace" size="sm">
+      {isMobile ? (
+        <Stack gap="xs">
+          {isLoading && <Text c="dimmed">{t('common.loading')}</Text>}
+          {rules.map((r) => (
+            <Paper key={r.id} withBorder p="sm" data-mobile-card>
+              <Stack gap={6}>
+                <Group justify="space-between" wrap="nowrap" gap="xs">
+                  <Text fw={500}>{r.name}</Text>
+                  <Badge color={r.active ? 'teal' : 'gray'} variant="light">
+                    {r.active ? t('admin.active') : t('admin.inactive')}
+                  </Badge>
+                </Group>
+                <Group gap={6} wrap="nowrap" align="baseline">
+                  <Text size="xs" c="dimmed" style={{ minWidth: 80 }}>
+                    {t('reminders.template')}
+                  </Text>
+                  <Text size="sm" ff="monospace" style={{ wordBreak: 'break-all' }}>
                     {r.template_key}
                   </Text>
-                </Table.Td>
-                <Table.Td>
-                  <Text ff="monospace" size="sm">{r.anchor}</Text>
-                </Table.Td>
-                <Table.Td>
+                </Group>
+                <Group gap={6} wrap="nowrap" align="baseline">
+                  <Text size="xs" c="dimmed" style={{ minWidth: 80 }}>
+                    {t('reminders.anchor')}
+                  </Text>
+                  <Text size="sm" ff="monospace" style={{ wordBreak: 'break-all' }}>
+                    {r.anchor}
+                  </Text>
+                </Group>
+                <Group gap={6} wrap="nowrap" align="baseline">
+                  <Text size="xs" c="dimmed" style={{ minWidth: 80 }}>
+                    {t('reminders.daysOffset')}
+                  </Text>
                   <Text size="sm">
                     {r.days_offset > 0 ? '+' : ''}
                     {r.days_offset}
                   </Text>
-                </Table.Td>
-                <Table.Td>
-                  <Badge color={r.active ? 'teal' : 'gray'} variant="light">
-                    {r.active ? t('admin.active') : t('admin.inactive')}
-                  </Badge>
-                </Table.Td>
-                <Table.Td>
-                  <Group gap={4} wrap="nowrap">
-                    <ActionIcon variant="subtle" onClick={() => setEditing(r)}>
-                      <IconEdit size={14} />
-                    </ActionIcon>
-                    <ActionIcon
-                      variant="subtle"
-                      color="red"
-                      onClick={() => {
-                        if (window.confirm(t('reminders.confirmDelete', { name: r.name }))) {
-                          delRule.mutate(r.id);
-                        }
-                      }}
-                    >
-                      <IconTrash size={14} />
-                    </ActionIcon>
-                  </Group>
-                </Table.Td>
-              </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </Table>
-        </Table.ScrollContainer>
-      </Paper>
+                </Group>
+                <Group justify="flex-end" gap={4}>
+                  <ActionIcon variant="subtle" onClick={() => setEditing(r)}>
+                    <IconEdit size={14} />
+                  </ActionIcon>
+                  <ActionIcon
+                    variant="subtle"
+                    color="red"
+                    onClick={() => confirmDelete(r)}
+                  >
+                    <IconTrash size={14} />
+                  </ActionIcon>
+                </Group>
+              </Stack>
+            </Paper>
+          ))}
+        </Stack>
+      ) : (
+        <Paper withBorder>
+          <Table.ScrollContainer minWidth={760}>
+            <Table verticalSpacing="sm" style={{ whiteSpace: 'nowrap' }}>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>{t('reminders.name')}</Table.Th>
+                  <Table.Th>{t('reminders.template')}</Table.Th>
+                  <Table.Th>{t('reminders.anchor')}</Table.Th>
+                  <Table.Th>{t('reminders.daysOffset')}</Table.Th>
+                  <Table.Th>{t('reminders.active')}</Table.Th>
+                  <Table.Th w={80}></Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {isLoading && (
+                  <Table.Tr>
+                    <Table.Td colSpan={6}>
+                      <Text c="dimmed">{t('common.loading')}</Text>
+                    </Table.Td>
+                  </Table.Tr>
+                )}
+                {rules.map((r) => (
+                  <Table.Tr key={r.id}>
+                    <Table.Td>{r.name}</Table.Td>
+                    <Table.Td>
+                      <Text ff="monospace" size="sm">
+                        {r.template_key}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text ff="monospace" size="sm">{r.anchor}</Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="sm">
+                        {r.days_offset > 0 ? '+' : ''}
+                        {r.days_offset}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Badge color={r.active ? 'teal' : 'gray'} variant="light">
+                        {r.active ? t('admin.active') : t('admin.inactive')}
+                      </Badge>
+                    </Table.Td>
+                    <Table.Td>
+                      <Group gap={4} wrap="nowrap">
+                        <ActionIcon variant="subtle" onClick={() => setEditing(r)}>
+                          <IconEdit size={14} />
+                        </ActionIcon>
+                        <ActionIcon
+                          variant="subtle"
+                          color="red"
+                          onClick={() => confirmDelete(r)}
+                        >
+                          <IconTrash size={14} />
+                        </ActionIcon>
+                      </Group>
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+        </Paper>
+      )}
 
       <RuleFormModal
         rule={editing}

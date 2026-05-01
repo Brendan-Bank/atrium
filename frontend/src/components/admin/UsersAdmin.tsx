@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Brendan Bank
 // SPDX-License-Identifier: BSD-2-Clause
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   ActionIcon,
   Alert,
@@ -23,6 +23,7 @@ import {
   UnstyledButton,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
+import { useMediaQuery } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import {
   IconCheck,
@@ -62,9 +63,11 @@ function acceptUrl(token: string): string {
 function InviteRow({
   invite,
   onRevoke,
+  mobile,
 }: {
   invite: Invite;
   onRevoke: (id: number) => void;
+  mobile?: boolean;
 }) {
   const { t } = useTranslation();
   const expired = new Date(invite.expires_at) < new Date();
@@ -82,6 +85,39 @@ function InviteRow({
 
   const roleLabel =
     invite.role_codes.length > 0 ? invite.role_codes.join(', ') : '—';
+
+  if (mobile) {
+    return (
+      <Paper withBorder p="sm" data-mobile-card>
+        <Stack gap={6}>
+          <Group justify="space-between" wrap="nowrap" gap="xs">
+            <Text fw={500}>{invite.full_name}</Text>
+            {statusEl}
+          </Group>
+          <Text size="sm" c="dimmed" style={{ wordBreak: 'break-all' }}>
+            {invite.email}
+          </Text>
+          <MobileField label={t('users.roles')} value={roleLabel} />
+          <MobileField
+            label={t('users.expiresAt')}
+            value={invite.expires_at.slice(0, 10)}
+          />
+          {active && (
+            <Group justify="flex-end">
+              <ActionIcon
+                variant="subtle"
+                color="red"
+                onClick={() => onRevoke(invite.id)}
+                aria-label={t('common.delete')}
+              >
+                <IconTrash size={14} />
+              </ActionIcon>
+            </Group>
+          )}
+        </Stack>
+      </Paper>
+    );
+  }
 
   return (
     <Table.Tr>
@@ -103,6 +139,19 @@ function InviteRow({
         )}
       </Table.Td>
     </Table.Tr>
+  );
+}
+
+function MobileField({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <Group gap={6} wrap="nowrap" align="baseline">
+      <Text size="xs" c="dimmed" style={{ minWidth: 72 }}>
+        {label}
+      </Text>
+      <Text size="sm" style={{ flex: 1 }}>
+        {value}
+      </Text>
+    </Group>
   );
 }
 
@@ -262,6 +311,8 @@ export function UsersAdmin() {
   const { data: invites = [], isLoading: loadingInvites } = useInvites();
   const revokeInvite = useRevokeInvite();
   const [inviteOpen, setInviteOpen] = useState(false);
+  const isMobile =
+    useMediaQuery('(max-width: 48em)', false, { getInitialValueInEffect: false });
 
   const handleRevoke = async (id: number) => {
     if (!window.confirm(t('users.confirmRevoke'))) return;
@@ -285,87 +336,103 @@ export function UsersAdmin() {
         </Button>
       </Group>
 
-      <Paper withBorder>
-        <Table.ScrollContainer minWidth={720}>
-        <Table verticalSpacing="sm" style={{ whiteSpace: 'nowrap' }}>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>{t('profile.fullName')}</Table.Th>
-              <Table.Th>{t('login.email')}</Table.Th>
-              <Table.Th>{t('users.roles')}</Table.Th>
-              <Table.Th>{t('admin.status')}</Table.Th>
-              <Table.Th w={100}></Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {loadingUsers && (
-              <Table.Tr>
-                <Table.Td colSpan={5}>
-                  <Text c="dimmed">{t('common.loading')}</Text>
-                </Table.Td>
-              </Table.Tr>
-            )}
-            {!loadingUsers && users.length === 0 && (
-              <Table.Tr>
-                <Table.Td colSpan={5}>
-                  <Text c="dimmed">{t('users.emptyUsers')}</Text>
-                </Table.Td>
-              </Table.Tr>
-            )}
-            {users.map((u) => (
-              <UserRow
-                key={u.id}
-                user={u}
-                isSelf={u.id === me?.id}
-              />
-            ))}
-          </Table.Tbody>
-        </Table>
-        </Table.ScrollContainer>
-      </Paper>
+      {isMobile ? (
+        <Stack gap="xs">
+          {loadingUsers && <Text c="dimmed">{t('common.loading')}</Text>}
+          {!loadingUsers && users.length === 0 && (
+            <Text c="dimmed">{t('users.emptyUsers')}</Text>
+          )}
+          {users.map((u) => (
+            <UserRow key={u.id} user={u} isSelf={u.id === me?.id} mobile />
+          ))}
+        </Stack>
+      ) : (
+        <Paper withBorder>
+          <Table.ScrollContainer minWidth={720}>
+            <Table verticalSpacing="sm" style={{ whiteSpace: 'nowrap' }}>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>{t('profile.fullName')}</Table.Th>
+                  <Table.Th>{t('login.email')}</Table.Th>
+                  <Table.Th>{t('users.roles')}</Table.Th>
+                  <Table.Th>{t('admin.status')}</Table.Th>
+                  <Table.Th w={100}></Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {loadingUsers && (
+                  <Table.Tr>
+                    <Table.Td colSpan={5}>
+                      <Text c="dimmed">{t('common.loading')}</Text>
+                    </Table.Td>
+                  </Table.Tr>
+                )}
+                {!loadingUsers && users.length === 0 && (
+                  <Table.Tr>
+                    <Table.Td colSpan={5}>
+                      <Text c="dimmed">{t('users.emptyUsers')}</Text>
+                    </Table.Td>
+                  </Table.Tr>
+                )}
+                {users.map((u) => (
+                  <UserRow key={u.id} user={u} isSelf={u.id === me?.id} />
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+        </Paper>
+      )}
 
       <Title order={4} mt="md">
         {t('users.invitesTitle')}
       </Title>
-      <Paper withBorder>
-        <Table.ScrollContainer minWidth={780}>
-        <Table verticalSpacing="sm" style={{ whiteSpace: 'nowrap' }}>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>{t('profile.fullName')}</Table.Th>
-              <Table.Th>{t('login.email')}</Table.Th>
-              <Table.Th>{t('users.roles')}</Table.Th>
-              <Table.Th>{t('users.expiresAt')}</Table.Th>
-              <Table.Th>{t('admin.status')}</Table.Th>
-              <Table.Th w={60}></Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {loadingInvites && (
-              <Table.Tr>
-                <Table.Td colSpan={6}>
-                  <Text c="dimmed">{t('common.loading')}</Text>
-                </Table.Td>
-              </Table.Tr>
-            )}
-            {!loadingInvites && invites.length === 0 && (
-              <Table.Tr>
-                <Table.Td colSpan={6}>
-                  <Text c="dimmed">{t('users.emptyInvites')}</Text>
-                </Table.Td>
-              </Table.Tr>
-            )}
-            {invites.map((inv) => (
-              <InviteRow
-                key={inv.id}
-                invite={inv}
-                onRevoke={handleRevoke}
-              />
-            ))}
-          </Table.Tbody>
-        </Table>
-        </Table.ScrollContainer>
-      </Paper>
+      {isMobile ? (
+        <Stack gap="xs">
+          {loadingInvites && <Text c="dimmed">{t('common.loading')}</Text>}
+          {!loadingInvites && invites.length === 0 && (
+            <Text c="dimmed">{t('users.emptyInvites')}</Text>
+          )}
+          {invites.map((inv) => (
+            <InviteRow key={inv.id} invite={inv} onRevoke={handleRevoke} mobile />
+          ))}
+        </Stack>
+      ) : (
+        <Paper withBorder>
+          <Table.ScrollContainer minWidth={780}>
+            <Table verticalSpacing="sm" style={{ whiteSpace: 'nowrap' }}>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>{t('profile.fullName')}</Table.Th>
+                  <Table.Th>{t('login.email')}</Table.Th>
+                  <Table.Th>{t('users.roles')}</Table.Th>
+                  <Table.Th>{t('users.expiresAt')}</Table.Th>
+                  <Table.Th>{t('admin.status')}</Table.Th>
+                  <Table.Th w={60}></Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {loadingInvites && (
+                  <Table.Tr>
+                    <Table.Td colSpan={6}>
+                      <Text c="dimmed">{t('common.loading')}</Text>
+                    </Table.Td>
+                  </Table.Tr>
+                )}
+                {!loadingInvites && invites.length === 0 && (
+                  <Table.Tr>
+                    <Table.Td colSpan={6}>
+                      <Text c="dimmed">{t('users.emptyInvites')}</Text>
+                    </Table.Td>
+                  </Table.Tr>
+                )}
+                {invites.map((inv) => (
+                  <InviteRow key={inv.id} invite={inv} onRevoke={handleRevoke} />
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+        </Paper>
+      )}
 
       <InviteModal opened={inviteOpen} onClose={() => setInviteOpen(false)} />
     </Stack>
@@ -447,9 +514,11 @@ function UserEditModal({
 function UserRow({
   user,
   isSelf,
+  mobile,
 }: {
   user: AdminUser;
   isSelf: boolean;
+  mobile?: boolean;
 }) {
   const { t } = useTranslation();
   const update = useUpdateAdminUser(user.id);
@@ -564,6 +633,112 @@ function UserRow({
     }
   };
 
+  const actions = (
+    <Group gap={4} wrap={mobile ? 'wrap' : 'nowrap'}>
+      {canImpersonate && !isSelf && (
+        <Tooltip label={t('users.impersonateTooltip')} withArrow>
+          <ActionIcon
+            variant="subtle"
+            color="orange"
+            onClick={handleImpersonate}
+            disabled={!user.is_active}
+            aria-label={t('impersonate.action')}
+          >
+            <IconUserShield size={14} />
+          </ActionIcon>
+        </Tooltip>
+      )}
+      <Tooltip label={t('users.resetPwTooltip')} withArrow>
+        <ActionIcon
+          variant="subtle"
+          onClick={handleResetPw}
+          loading={resetPw.isPending}
+          disabled={!user.is_active}
+          aria-label={t('users.resetPw')}
+        >
+          <IconKey size={14} />
+        </ActionIcon>
+      </Tooltip>
+      {canResetTOTP && !isSelf && (
+        <Tooltip label={t('users.resetTOTPTooltip')} withArrow>
+          <ActionIcon
+            variant="subtle"
+            color="yellow"
+            onClick={handleResetTOTP}
+            loading={resetTOTP.isPending}
+            disabled={!user.is_active}
+            aria-label={t('twoFactor.adminResetButton')}
+          >
+            <IconDeviceMobile size={14} />
+          </ActionIcon>
+        </Tooltip>
+      )}
+      {!isSelf && (
+        <Tooltip label={t('users.deleteTooltip')} withArrow>
+          <ActionIcon
+            variant="subtle"
+            color="red"
+            onClick={handleDelete}
+            loading={deletePerm.isPending}
+            aria-label={t('common.delete')}
+          >
+            <IconTrash size={14} />
+          </ActionIcon>
+        </Tooltip>
+      )}
+    </Group>
+  );
+
+  if (mobile) {
+    return (
+      <Paper withBorder p="sm" data-mobile-card>
+        <Stack gap={6}>
+          <Group justify="space-between" wrap="nowrap" gap="xs">
+            <UnstyledButton onClick={() => setEditOpen(true)}>
+              <Group gap={4} wrap="nowrap">
+                <Text fw={500}>{user.full_name}</Text>
+                <IconPencil
+                  size={12}
+                  style={{ opacity: 0.5 }}
+                  aria-label={t('common.edit')}
+                />
+              </Group>
+            </UnstyledButton>
+            {isSelf && (
+              <Badge color="gray" variant="light" size="xs">
+                {t('users.you')}
+              </Badge>
+            )}
+          </Group>
+          <Text size="sm" c="dimmed" style={{ wordBreak: 'break-all' }}>
+            {user.email}
+          </Text>
+          <MultiSelect
+            size="xs"
+            label={t('users.roles')}
+            value={user.role_ids.map(String)}
+            onChange={changeRoles}
+            data={roles.map((r) => ({ value: String(r.id), label: r.name }))}
+            placeholder={t('users.rolesPlaceholder')}
+            searchable
+          />
+          <Switch
+            checked={user.is_active}
+            onChange={(e) => toggle(e.currentTarget.checked)}
+            disabled={isSelf}
+            label={user.is_active ? t('admin.active') : t('admin.inactive')}
+          />
+          <Group justify="flex-end">{actions}</Group>
+        </Stack>
+        <UserEditModal
+          opened={editOpen}
+          onClose={() => setEditOpen(false)}
+          user={user}
+        />
+      </Paper>
+    );
+  }
+
   return (
     <Table.Tr>
       <Table.Td>
@@ -608,61 +783,7 @@ function UserRow({
           label={user.is_active ? t('admin.active') : t('admin.inactive')}
         />
       </Table.Td>
-      <Table.Td>
-        <Group gap={4} wrap="nowrap">
-          {canImpersonate && !isSelf && (
-            <Tooltip label={t('users.impersonateTooltip')} withArrow>
-              <ActionIcon
-                variant="subtle"
-                color="orange"
-                onClick={handleImpersonate}
-                disabled={!user.is_active}
-                aria-label={t('impersonate.action')}
-              >
-                <IconUserShield size={14} />
-              </ActionIcon>
-            </Tooltip>
-          )}
-          <Tooltip label={t('users.resetPwTooltip')} withArrow>
-            <ActionIcon
-              variant="subtle"
-              onClick={handleResetPw}
-              loading={resetPw.isPending}
-              disabled={!user.is_active}
-              aria-label={t('users.resetPw')}
-            >
-              <IconKey size={14} />
-            </ActionIcon>
-          </Tooltip>
-          {canResetTOTP && !isSelf && (
-            <Tooltip label={t('users.resetTOTPTooltip')} withArrow>
-              <ActionIcon
-                variant="subtle"
-                color="yellow"
-                onClick={handleResetTOTP}
-                loading={resetTOTP.isPending}
-                disabled={!user.is_active}
-                aria-label={t('twoFactor.adminResetButton')}
-              >
-                <IconDeviceMobile size={14} />
-              </ActionIcon>
-            </Tooltip>
-          )}
-          {!isSelf && (
-            <Tooltip label={t('users.deleteTooltip')} withArrow>
-              <ActionIcon
-                variant="subtle"
-                color="red"
-                onClick={handleDelete}
-                loading={deletePerm.isPending}
-                aria-label={t('common.delete')}
-              >
-                <IconTrash size={14} />
-              </ActionIcon>
-            </Tooltip>
-          )}
-        </Group>
-      </Table.Td>
+      <Table.Td>{actions}</Table.Td>
     </Table.Tr>
   );
 }

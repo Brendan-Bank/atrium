@@ -17,6 +17,7 @@ import {
   Title,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
+import { useMediaQuery } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { IconPlus, IconTrash } from '@tabler/icons-react';
 import { useTranslation } from 'react-i18next';
@@ -301,7 +302,15 @@ function NewRoleModal({
   );
 }
 
-function RoleRow({ role, permissions }: { role: Role; permissions: Permission[] }) {
+function RoleRow({
+  role,
+  permissions,
+  mobile,
+}: {
+  role: Role;
+  permissions: Permission[];
+  mobile?: boolean;
+}) {
   const { t } = useTranslation();
   const del = useDeleteRole();
   const [open, setOpen] = useState(false);
@@ -319,6 +328,64 @@ function RoleRow({ role, permissions }: { role: Role; permissions: Permission[] 
       });
     }
   };
+
+  const deleteIcon = !role.is_system && (
+    <ActionIcon
+      variant="subtle"
+      color="red"
+      onClick={handleDelete}
+      loading={del.isPending}
+      aria-label={t('common.delete')}
+    >
+      <IconTrash size={14} />
+    </ActionIcon>
+  );
+
+  if (mobile) {
+    return (
+      <Paper withBorder p="sm" data-mobile-card>
+        <Stack gap={6}>
+          <Group justify="space-between" wrap="nowrap" gap="xs">
+            <Group gap="xs" wrap="nowrap">
+              <Button
+                variant="subtle"
+                size="compact-sm"
+                onClick={() => setOpen(true)}
+              >
+                {role.name}
+              </Button>
+              {role.is_system && (
+                <Badge color="gray" variant="light" size="xs">
+                  {t('roles.system')}
+                </Badge>
+              )}
+            </Group>
+            {deleteIcon}
+          </Group>
+          <Group gap={6} wrap="nowrap" align="baseline">
+            <Text size="xs" c="dimmed" style={{ minWidth: 72 }}>
+              {t('roles.code')}
+            </Text>
+            <Text size="sm" ff="monospace">
+              {role.code}
+            </Text>
+          </Group>
+          <Group gap={6} wrap="nowrap" align="baseline">
+            <Text size="xs" c="dimmed" style={{ minWidth: 72 }}>
+              {t('roles.permCount')}
+            </Text>
+            <Text size="sm">{role.permissions.length}</Text>
+          </Group>
+        </Stack>
+        <RoleEditModal
+          opened={open}
+          onClose={() => setOpen(false)}
+          role={role}
+          permissions={permissions}
+        />
+      </Paper>
+    );
+  }
 
   return (
     <Table.Tr>
@@ -344,19 +411,7 @@ function RoleRow({ role, permissions }: { role: Role; permissions: Permission[] 
         </Text>
       </Table.Td>
       <Table.Td>{role.permissions.length}</Table.Td>
-      <Table.Td>
-        {!role.is_system && (
-          <ActionIcon
-            variant="subtle"
-            color="red"
-            onClick={handleDelete}
-            loading={del.isPending}
-            aria-label={t('common.delete')}
-          >
-            <IconTrash size={14} />
-          </ActionIcon>
-        )}
-      </Table.Td>
+      <Table.Td>{deleteIcon}</Table.Td>
     </Table.Tr>
   );
 }
@@ -366,6 +421,8 @@ export function RolesAdmin() {
   const { data: roles = [], isLoading } = useRoles();
   const { data: permissions = [] } = usePermissions();
   const [newOpen, setNewOpen] = useState(false);
+  const isMobile =
+    useMediaQuery('(max-width: 48em)', false, { getInitialValueInEffect: false });
 
   return (
     <Stack>
@@ -379,39 +436,51 @@ export function RolesAdmin() {
         </Button>
       </Group>
 
-      <Paper withBorder>
-        <Table.ScrollContainer minWidth={560}>
-        <Table verticalSpacing="sm" style={{ whiteSpace: 'nowrap' }}>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>{t('roles.name')}</Table.Th>
-              <Table.Th>{t('roles.code')}</Table.Th>
-              <Table.Th>{t('roles.permCount')}</Table.Th>
-              <Table.Th w={60}></Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {isLoading && (
-              <Table.Tr>
-                <Table.Td colSpan={4}>
-                  <Text c="dimmed">{t('common.loading')}</Text>
-                </Table.Td>
-              </Table.Tr>
-            )}
-            {!isLoading && roles.length === 0 && (
-              <Table.Tr>
-                <Table.Td colSpan={4}>
-                  <Text c="dimmed">{t('roles.empty')}</Text>
-                </Table.Td>
-              </Table.Tr>
-            )}
-            {roles.map((r) => (
-              <RoleRow key={r.id} role={r} permissions={permissions} />
-            ))}
-          </Table.Tbody>
-        </Table>
-        </Table.ScrollContainer>
-      </Paper>
+      {isMobile ? (
+        <Stack gap="xs">
+          {isLoading && <Text c="dimmed">{t('common.loading')}</Text>}
+          {!isLoading && roles.length === 0 && (
+            <Text c="dimmed">{t('roles.empty')}</Text>
+          )}
+          {roles.map((r) => (
+            <RoleRow key={r.id} role={r} permissions={permissions} mobile />
+          ))}
+        </Stack>
+      ) : (
+        <Paper withBorder>
+          <Table.ScrollContainer minWidth={560}>
+            <Table verticalSpacing="sm" style={{ whiteSpace: 'nowrap' }}>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>{t('roles.name')}</Table.Th>
+                  <Table.Th>{t('roles.code')}</Table.Th>
+                  <Table.Th>{t('roles.permCount')}</Table.Th>
+                  <Table.Th w={60}></Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {isLoading && (
+                  <Table.Tr>
+                    <Table.Td colSpan={4}>
+                      <Text c="dimmed">{t('common.loading')}</Text>
+                    </Table.Td>
+                  </Table.Tr>
+                )}
+                {!isLoading && roles.length === 0 && (
+                  <Table.Tr>
+                    <Table.Td colSpan={4}>
+                      <Text c="dimmed">{t('roles.empty')}</Text>
+                    </Table.Td>
+                  </Table.Tr>
+                )}
+                {roles.map((r) => (
+                  <RoleRow key={r.id} role={r} permissions={permissions} />
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+        </Paper>
+      )}
 
       <NewRoleModal
         opened={newOpen}
