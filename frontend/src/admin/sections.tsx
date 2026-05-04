@@ -32,19 +32,44 @@ import { useMe, usePerm } from '@/hooks/useAuth';
 import {
   getAdminTabs,
   getBuiltinAdminTabOverride,
+  getSettingsGroups,
   type AdminSection,
 } from '@/host/registry';
 
 /** A resolved admin/settings section row. Both the sidebar's expandable
  *  parent and the route page render from the same list, so visibility
- *  filtering and sort order are computed once here. */
+ *  filtering and sort order are computed once here.
+ *
+ *  Three shapes are produced:
+ *
+ *  - Atrium built-in tabs and ``registerAdminTab`` host entries: a
+ *    leaf with ``render``. Sidebar nav synthesises the path as
+ *    ``${bucket}/${key}`` and ``SectionPage`` mounts ``render()`` at
+ *    that route.
+ *  - Host ``registerSettingsGroup`` containers: a group with
+ *    ``children`` and no ``render``. Sidebar renders a nested
+ *    collapsible NavLink; ``SectionPage`` never matches a group's key
+ *    directly (group children own arbitrary route paths the host
+ *    registers separately).
+ *  - Host group children: leaves with ``to`` and no ``render``. The
+ *    sidebar links to ``to`` directly; ``SectionPage`` doesn't render
+ *    them. */
 export interface SectionItem {
   key: string;
   label: string;
   icon?: ReactElement;
   /** Returns a fresh element on each render — matches the registry's
-   *  ``render()`` shape so host tabs and built-ins look the same. */
-  render: () => ReactElement;
+   *  ``render()`` shape. Present on flat tabs (built-in or
+   *  ``registerAdminTab``) and absent on group containers and group
+   *  children whose routes are registered separately. */
+  render?: () => ReactElement;
+  /** Direct route path. Set on group children whose routes live
+   *  outside ``/admin/*`` / ``/settings/*``. When absent, the sidebar
+   *  derives the path as ``${bucket}/${key}``. */
+  to?: string;
+  /** Nested entries. When non-empty, this item is a collapsible group
+   *  in the sidebar. Group containers don't carry ``render``. */
+  children?: SectionItem[];
   order?: number;
 }
 
@@ -100,6 +125,46 @@ function hostItemsFor(
           : () => <></>,
       order: tab.order,
     }));
+}
+
+/** Resolve registered settings groups for the given bucket into
+ *  ``SectionItem`` containers with perm-filtered children. A group is
+ *  dropped entirely when:
+ *
+ *  - the group's ``perm`` is set and the user doesn't hold it, or
+ *  - every child is filtered out by its own ``perm``, or
+ *  - ``children`` is empty.
+ *
+ *  Group children carry their host-supplied ``to`` so the sidebar can
+ *  navigate to a host-registered route outside the ``/admin/*`` URL
+ *  space. */
+function hostGroupsFor(
+  section: AdminSection,
+  userPerms: readonly string[],
+): SectionItem[] {
+  const items: SectionItem[] = [];
+  for (const group of getSettingsGroups()) {
+    if ((group.section ?? 'admin') !== section) continue;
+    if (group.perm && !userPerms.includes(group.perm)) continue;
+    const children: SectionItem[] = group.children
+      .filter((child) => !child.perm || userPerms.includes(child.perm))
+      .map((child) => ({
+        key: child.key,
+        label: child.label,
+        to: child.to,
+        order: child.order,
+      }));
+    if (children.length === 0) continue;
+    const item: SectionItem = {
+      key: group.key,
+      label: group.label,
+      children: sortByOrder(children),
+    };
+    if (group.icon) item.icon = group.icon;
+    if (group.order !== undefined) item.order = group.order;
+    items.push(item);
+  }
+  return items;
 }
 
 function builtinsFor(
@@ -258,9 +323,11 @@ function useBuiltinDefs(): BuiltinDef[] {
 export function useAdminSectionItems(): SectionItem[] {
   const { data: me } = useMe();
   const builtinDefs = useBuiltinDefs();
+  const perms = me?.permissions ?? [];
   return sortByOrder([
     ...builtinsFor('admin', builtinDefs),
-    ...hostItemsFor('admin', me?.permissions ?? []),
+    ...hostItemsFor('admin', perms),
+    ...hostGroupsFor('admin', perms),
   ]);
 }
 
@@ -272,8 +339,10 @@ export function useAdminSectionItems(): SectionItem[] {
 export function useSettingsSectionItems(): SectionItem[] {
   const { data: me } = useMe();
   const builtinDefs = useBuiltinDefs();
+  const perms = me?.permissions ?? [];
   return sortByOrder([
     ...builtinsFor('settings', builtinDefs),
-    ...hostItemsFor('settings', me?.permissions ?? []),
+    ...hostItemsFor('settings', perms),
+    ...hostGroupsFor('settings', perms),
   ]);
 }

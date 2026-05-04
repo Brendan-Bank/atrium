@@ -662,13 +662,14 @@ System tab) and the `audit_prune` job will DELETE older rows daily.
   stripped server-side anyway.
 - Host bundles inject UI fragments via the registry in
   `src/host/registry.ts`: `registerHomeWidget`, `registerRoute`,
-  `registerNavItem`, `registerAdminTab`, `registerProfileItem`. All
-  five must be called at import-time before React mounts (see
-  `loadHostBundle` in `src/main.tsx`). `registerProfileItem` takes an
-  optional `slot` (`after-profile` / `after-password` / `after-2fa` /
-  `after-roles` (default) / `after-sessions` / `before-delete`) and an
-  optional `condition({ me })` predicate; the host owns the card
-  chrome (no auto-wrapping in a `Paper`).
+  `registerNavItem`, `registerAdminTab`, `registerSettingsGroup`,
+  `registerProfileItem`. All must be called at import-time before
+  React mounts (see `loadHostBundle` in `src/main.tsx`).
+  `registerProfileItem` takes an optional `slot` (`after-profile` /
+  `after-password` / `after-2fa` / `after-roles` (default) /
+  `after-sessions` / `before-delete`) and an optional
+  `condition({ me })` predicate; the host owns the card chrome (no
+  auto-wrapping in a `Paper`).
 - The admin shell has two sibling left-sidebar groups: **Settings**
   (above) and **Admin** (below). Each is an expandable Mantine
   `NavLink` parent whose children are the registered admin tabs for
@@ -684,6 +685,15 @@ System tab) and the `audit_prune` job will DELETE older rows daily.
   route page (`SectionPage` in `src/routes/AdminPage.tsx`) consume
   the same `useAdminSectionItems()` / `useSettingsSectionItems()`
   hooks so visibility filtering and sort order stay consistent.
+- Hosts that ship multiple admin pages can group them under a single
+  collapsible parent via `registerSettingsGroup({ key, label,
+  section?, perm?, order?, children })`. Each child is a nav-only
+  pointer `{ key, label, to, perm? }` whose route is registered
+  separately via `registerRoute`. The group renders as a nested
+  `NavLink` inside the chosen Admin/Settings parent; empty groups
+  (group `perm` not held, or every child gated out) hide entirely.
+  `SectionPage` does not match group keys — group children own their
+  own route paths outside `/admin/*`. Available since atrium 0.25.
 
 ## Testing
 

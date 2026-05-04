@@ -15,10 +15,16 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import { renderHook, cleanup } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-import { useAdminSectionItems } from '@/admin/sections';
+import {
+  useAdminSectionItems,
+  useSettingsSectionItems,
+} from '@/admin/sections';
 import { ME_QUERY_KEY } from '@/hooks/useAuth';
 import type { CurrentUser } from '@/lib/auth';
-import { __resetRegistryForTests } from '@/host/registry';
+import {
+  __resetRegistryForTests,
+  registerSettingsGroup,
+} from '@/host/registry';
 
 function makeUser(perms: string[]): CurrentUser {
   return {
@@ -119,6 +125,95 @@ describe('useAdminSectionItems — built-in tab perm gating (#86)', () => {
       'reminders',
       'audit',
     ]);
+  });
+
+  it('surfaces a registerSettingsGroup container with perm-filtered children in the admin bucket', () => {
+    registerSettingsGroup({
+      key: 'pa',
+      label: 'PA',
+      section: 'admin',
+      children: [
+        { key: 'secrets', label: 'Secrets', to: '/pa/admin/secrets' },
+        {
+          key: 'providers',
+          label: 'Providers',
+          to: '/pa/admin/providers',
+          perm: 'pa.providers.manage',
+        },
+      ],
+    });
+    const { result } = renderHook(() => useAdminSectionItems(), {
+      wrapper: withClient(makeUser([])),
+    });
+    const pa = result.current.find((i) => i.key === 'pa');
+    expect(pa).toBeDefined();
+    expect(pa?.render).toBeUndefined();
+    expect(pa?.children?.map((c) => c.key)).toEqual(['secrets']);
+    cleanup();
+
+    const { result: withGated } = renderHook(() => useAdminSectionItems(), {
+      wrapper: withClient(makeUser(['pa.providers.manage'])),
+    });
+    const paFull = withGated.current.find((i) => i.key === 'pa');
+    expect(paFull?.children?.map((c) => c.key)).toEqual([
+      'secrets',
+      'providers',
+    ]);
+  });
+
+  it('hides a settings group entirely when its perm is not held', () => {
+    registerSettingsGroup({
+      key: 'pa',
+      label: 'PA',
+      section: 'admin',
+      perm: 'pa.admin',
+      children: [{ key: 'secrets', label: 'Secrets', to: '/pa/admin/secrets' }],
+    });
+    const { result } = renderHook(() => useAdminSectionItems(), {
+      wrapper: withClient(makeUser([])),
+    });
+    expect(result.current.find((i) => i.key === 'pa')).toBeUndefined();
+  });
+
+  it('hides a settings group when every child is perm-gated out', () => {
+    registerSettingsGroup({
+      key: 'pa',
+      label: 'PA',
+      section: 'admin',
+      children: [
+        {
+          key: 'secrets',
+          label: 'Secrets',
+          to: '/pa/admin/secrets',
+          perm: 'pa.secrets.read',
+        },
+        {
+          key: 'providers',
+          label: 'Providers',
+          to: '/pa/admin/providers',
+          perm: 'pa.providers.manage',
+        },
+      ],
+    });
+    const { result } = renderHook(() => useAdminSectionItems(), {
+      wrapper: withClient(makeUser([])),
+    });
+    expect(result.current.find((i) => i.key === 'pa')).toBeUndefined();
+  });
+
+  it('surfaces a settings-section group through useSettingsSectionItems', () => {
+    registerSettingsGroup({
+      key: 'preferences',
+      label: 'Preferences',
+      section: 'settings',
+      children: [
+        { key: 'general', label: 'General', to: '/host/settings/general' },
+      ],
+    });
+    const { result } = renderHook(() => useSettingsSectionItems(), {
+      wrapper: withClient(makeUser([])),
+    });
+    expect(result.current.map((i) => i.key)).toContain('preferences');
   });
 
   it('does not regress existing gates (audit / roles / email templates / outbox / app config)', () => {

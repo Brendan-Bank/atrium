@@ -140,6 +140,54 @@ export type AdminTab = {
   order?: number;
 };
 
+/** A nav-only leaf inside a host-registered ``SettingsGroup``. Carries
+ *  no ``render`` because group children don't drive content rendering
+ *  themselves — the host registers the actual route via
+ *  ``registerRoute`` and points the child at it via ``to``. The child
+ *  is just the sidebar entry that navigates there. ``perm`` gates the
+ *  individual entry; the group itself can carry a coarser ``perm``
+ *  that hides every child. */
+export type SettingsGroupChild = {
+  key: string;
+  label: string;
+  /** Route path the sidebar entry navigates to. Must match a route the
+   *  host has registered (or atrium ships) — atrium does not
+   *  synthesise a path for group children the way ``registerAdminTab``
+   *  does for flat tabs. */
+  to: string;
+  /** Permission code; the child is hidden for users who don't hold it.
+   *  Omit to show the child to every user who can see the group. */
+  perm?: string;
+  order?: number;
+};
+
+/** Host-registered collapsible nav group. Lives inside the Admin or
+ *  Settings sidebar parent (per ``section``) and renders as a nested
+ *  expandable ``NavLink`` whose children are the entries in
+ *  ``children``. Empty groups (every child gated out by ``perm``, or
+ *  ``children`` empty) hide entirely.
+ *
+ *  The group itself is **navigation only** — atrium's
+ *  ``/admin/:section`` route does not look up groups; the children's
+ *  ``to`` paths point at host-registered routes whose content lives
+ *  outside the ``/admin/*`` URL space. Available since atrium 0.25. */
+export type SettingsGroup = {
+  key: string;
+  label: string;
+  icon?: ReactElement;
+  /** Sidebar bucket. Default ``admin``. ``settings`` puts the group
+   *  inside the Settings parent above. */
+  section?: AdminSection;
+  /** Optional permission code that gates the entire group. When the
+   *  user doesn't hold it, the group + every child are hidden in one
+   *  shot — saves listing the same perm on every child. */
+  perm?: string;
+  /** Sort key within the chosen bucket. Same semantics as
+   *  ``AdminTab.order`` — interleaves with built-in tabs at 100..900. */
+  order?: number;
+  children: SettingsGroupChild[];
+};
+
 /** Slot inside ``ProfilePage``'s vertical card stack where a host
  *  item is inserted. Default ``after-roles`` — the natural place for
  *  extra preferences. */
@@ -223,6 +271,7 @@ const homeWidgets: HomeWidget[] = [];
 const routes: RouteEntry[] = [];
 const navItems: NavItem[] = [];
 const adminTabs: AdminTab[] = [];
+const settingsGroups: SettingsGroup[] = [];
 const profileItems: ProfileItem[] = [];
 const notificationRenderers: NotificationKindRenderer[] = [];
 const localeOverlays: LocaleOverlay[] = [];
@@ -305,6 +354,25 @@ function registerAdminTab(tab: AdminTab): void {
     adminTabs.splice(idx, 1);
   }
   adminTabs.push(tab);
+}
+
+function registerSettingsGroup(group: SettingsGroup): void {
+  if (!Array.isArray(group.children)) {
+    console.warn(
+      `[atrium-registry] registerSettingsGroup({ key: "${group.key}" }) ` +
+        `requires \`children\` to be an array; registration ignored`,
+    );
+    return;
+  }
+  if (settingsGroups.some((g) => g.key === group.key)) {
+    console.warn(
+      `[atrium-registry] duplicate settings group key "${group.key}"; ` +
+        `last registration wins`,
+    );
+    const idx = settingsGroups.findIndex((g) => g.key === group.key);
+    settingsGroups.splice(idx, 1);
+  }
+  settingsGroups.push(group);
 }
 
 function registerProfileItem(item: ProfileItem): void {
@@ -390,6 +458,7 @@ const baseRegistry = {
   registerRoute,
   registerNavItem,
   registerAdminTab,
+  registerSettingsGroup,
   setBuiltinAdminTabSection,
   registerProfileItem,
   registerNotificationKind,
@@ -468,6 +537,10 @@ export function getAdminTabs(): readonly AdminTab[] {
   return sortByOrder(adminTabs);
 }
 
+export function getSettingsGroups(): readonly SettingsGroup[] {
+  return sortByOrder(settingsGroups);
+}
+
 /** Look up a host-supplied override for a built-in admin tab. Returns
  *  ``undefined`` when no host has called ``setBuiltinAdminTabSection``
  *  for the given key, in which case atrium's shipped defaults apply. */
@@ -521,6 +594,7 @@ export function __resetRegistryForTests(): void {
   routes.length = 0;
   navItems.length = 0;
   adminTabs.length = 0;
+  settingsGroups.length = 0;
   builtinAdminTabOverrides.clear();
   profileItems.length = 0;
   notificationRenderers.length = 0;
@@ -547,6 +621,7 @@ export {
   registerRoute,
   registerNavItem,
   registerAdminTab,
+  registerSettingsGroup,
   setBuiltinAdminTabSection,
   registerProfileItem,
   registerNotificationKind,

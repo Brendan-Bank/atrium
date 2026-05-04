@@ -215,6 +215,48 @@ export interface AdminTab {
   order?: number;
 }
 
+/** Nav-only leaf inside a host-registered `SettingsGroup`. Carries no
+ *  render — group children are sidebar pointers; the actual route is
+ *  registered separately via `registerRoute`. `perm` gates the
+ *  individual entry on top of any group-level `perm`. Available since
+ *  atrium 0.25. */
+export interface SettingsGroupChild {
+  key: string;
+  label: string;
+  /** Route path the sidebar entry navigates to. Must match a route the
+   *  host has registered (or atrium ships); atrium does not synthesise
+   *  a path for group children the way `registerAdminTab` does. */
+  to: string;
+  /** Permission code; the child is hidden for users who don't hold it. */
+  perm?: string;
+  order?: number;
+}
+
+/** Host-registered collapsible nav group. Renders inside the Admin or
+ *  Settings sidebar parent (per `section`) as a nested expandable
+ *  NavLink whose entries are the items in `children`. Empty groups —
+ *  every child gated out, or `children` empty — hide entirely.
+ *
+ *  Group children are nav-only; their content lives at the host-
+ *  registered routes their `to` paths point at. Available since atrium
+ *  0.25. */
+export interface SettingsGroup {
+  key: string;
+  label: string;
+  icon?: ReactElement;
+  /** Sidebar bucket. Default `'admin'`. `'settings'` puts the group
+   *  inside the Settings parent above. */
+  section?: AdminSection;
+  /** Permission code that gates the entire group. When the user
+   *  doesn't hold it, the group + every child are hidden in one shot
+   *  — saves listing the same perm on every child. */
+  perm?: string;
+  /** Sort key within the chosen bucket. Same semantics as
+   *  `AdminTab.order`. */
+  order?: number;
+  children: SettingsGroupChild[];
+}
+
 /** Insertion slot inside `ProfilePage`'s vertical card stack. Default
  *  `'after-roles'` — the natural place for extra preferences. */
 export type ProfileSlot =
@@ -299,6 +341,12 @@ export interface AtriumRegistry {
     section: AdminSection,
     order?: number,
   ) => void;
+  /** Register a collapsible nav group inside the Admin or Settings
+   *  sidebar parent. The group's children are nav-only pointers; the
+   *  host registers the actual routes via `registerRoute`. Hides
+   *  entirely when every child is perm-gated out. Available since
+   *  atrium 0.25. */
+  registerSettingsGroup?: (group: SettingsGroup) => void;
   registerProfileItem: (item: ProfileItem) => void;
   registerNotificationKind: (renderer: NotificationKindRenderer) => void;
   registerLocale: (overlay: LocaleOverlay) => void;
