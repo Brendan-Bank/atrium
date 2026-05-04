@@ -295,6 +295,25 @@ function buildNavLinks(args: {
     },
   ];
 
+  // Active when the URL is on the bucket's prefix OR on any
+  // host-registered group child whose ``to`` lives outside that prefix.
+  // The latter keeps the outer parent highlighted when a user is on a
+  // host route like ``/pa/admin/secrets`` reached from the Admin
+  // group's nested PA sub-group.
+  const bucketActive = (prefix: string, items: SectionItem[]): boolean => {
+    if (pathname === prefix || pathname.startsWith(`${prefix}/`)) return true;
+    for (const item of items) {
+      if (!item.children) continue;
+      for (const child of item.children) {
+        if (!child.to) continue;
+        if (pathname === child.to || pathname.startsWith(`${child.to}/`)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+
   // Settings hides entirely when no host has registered into it —
   // there's no atrium-shipped content for this group. Admin hides
   // when the viewer holds zero qualifying perms (matches the previous
@@ -307,7 +326,7 @@ function buildNavLinks(args: {
       icon: <IconAdjustments size={16} />,
       order: NAV_ORDER.settings,
       items: settingsItems,
-      active: pathname.startsWith('/settings'),
+      active: bucketActive('/settings', settingsItems),
     });
   }
   if (adminItems.length > 0) {
@@ -318,7 +337,7 @@ function buildNavLinks(args: {
       icon: <IconSettings size={16} />,
       order: NAV_ORDER.admin,
       items: adminItems,
-      active: pathname.startsWith('/admin'),
+      active: bucketActive('/admin', adminItems),
     });
   }
 
@@ -366,7 +385,49 @@ function buildNavLinks(args: {
           childrenOffset={28}
         >
           {entry.items.map((item) => {
-            const to = `${entry.to}/${item.key}`;
+            // Host-registered nested group: render as a second-tier
+            // collapsible NavLink whose children are leaf links pointed
+            // at the host's own routes (``child.to``). Atrium's flat
+            // ``/admin/<key>`` synthesis doesn't apply here — the host
+            // owns the URL space its routes live in.
+            if (item.children && item.children.length > 0) {
+              const groupKey = `${entry.key}/${item.key}`;
+              const groupActive = item.children.some((child) => {
+                const to = child.to ?? `${entry.to}/${child.key}`;
+                return pathname === to || pathname.startsWith(`${to}/`);
+              });
+              const userToggledChild = openGroups[groupKey];
+              const childOpened = userToggledChild ?? groupActive;
+              return (
+                <NavLink
+                  key={item.key}
+                  label={item.label}
+                  leftSection={item.icon}
+                  opened={childOpened}
+                  onClick={() => toggleGroup(groupKey)}
+                  active={groupActive}
+                  childrenOffset={28}
+                >
+                  {item.children.map((child) => {
+                    const to = child.to ?? `${entry.to}/${child.key}`;
+                    return (
+                      <NavLink
+                        key={child.key}
+                        component={Link}
+                        to={to}
+                        label={child.label}
+                        leftSection={child.icon}
+                        active={
+                          pathname === to || pathname.startsWith(`${to}/`)
+                        }
+                        onClick={onNavigate}
+                      />
+                    );
+                  })}
+                </NavLink>
+              );
+            }
+            const to = item.to ?? `${entry.to}/${item.key}`;
             return (
               <NavLink
                 key={item.key}

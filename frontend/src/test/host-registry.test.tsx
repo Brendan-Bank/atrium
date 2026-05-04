@@ -32,6 +32,7 @@ import {
   getNotificationRenderers,
   getProfileItems,
   getRoutes,
+  getSettingsGroups,
   lookupNotificationRenderer,
   registerAdminTab,
   registerHomeWidget,
@@ -40,6 +41,7 @@ import {
   registerNotificationKind,
   registerProfileItem,
   registerRoute,
+  registerSettingsGroup,
   setBuiltinAdminTabSection,
   subscribeEvent,
   subscribeLocaleOverlay,
@@ -268,6 +270,103 @@ describe('host registry', () => {
     } finally {
       warn.mockRestore();
     }
+  });
+
+  it('registerSettingsGroup records groups with children, perms, and section', () => {
+    registerSettingsGroup({
+      key: 'pa',
+      label: 'PA',
+      section: 'admin',
+      perm: 'pa.admin',
+      order: 350,
+      children: [
+        { key: 'secrets', label: 'Secrets', to: '/pa/admin/secrets' },
+        { key: 'providers', label: 'Providers', to: '/pa/admin/providers' },
+      ],
+    });
+    const groups = getSettingsGroups();
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.key).toBe('pa');
+    expect(groups[0]?.section).toBe('admin');
+    expect(groups[0]?.perm).toBe('pa.admin');
+    expect(groups[0]?.order).toBe(350);
+    expect(groups[0]?.children.map((c) => c.key)).toEqual([
+      'secrets',
+      'providers',
+    ]);
+  });
+
+  it('registerSettingsGroup replaces on duplicate key with a warning', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      registerSettingsGroup({
+        key: 'pa',
+        label: 'PA v1',
+        children: [{ key: 'x', label: 'X', to: '/pa/x' }],
+      });
+      registerSettingsGroup({
+        key: 'pa',
+        label: 'PA v2',
+        children: [{ key: 'y', label: 'Y', to: '/pa/y' }],
+      });
+      const groups = getSettingsGroups();
+      expect(groups).toHaveLength(1);
+      expect(groups[0]?.label).toBe('PA v2');
+      expect(groups[0]?.children[0]?.key).toBe('y');
+      expect(warn).toHaveBeenCalledOnce();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('registerSettingsGroup drops registrations with non-array children', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      registerSettingsGroup({
+        key: 'broken',
+        label: 'Broken',
+        children: undefined as unknown as never,
+      });
+      expect(getSettingsGroups()).toHaveLength(0);
+      expect(warn).toHaveBeenCalledOnce();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('getSettingsGroups returns groups sorted by optional order', () => {
+    registerSettingsGroup({
+      key: 'b',
+      label: 'B',
+      order: 200,
+      children: [{ key: 'b1', label: 'B1', to: '/b/1' }],
+    });
+    registerSettingsGroup({
+      key: 'no-order',
+      label: 'No order',
+      children: [{ key: 'n1', label: 'N1', to: '/n/1' }],
+    });
+    registerSettingsGroup({
+      key: 'a',
+      label: 'A',
+      order: 100,
+      children: [{ key: 'a1', label: 'A1', to: '/a/1' }],
+    });
+    expect(getSettingsGroups().map((g) => g.key)).toEqual([
+      'a',
+      'b',
+      'no-order',
+    ]);
+  });
+
+  it('registerSettingsGroup is reachable through window.__ATRIUM_REGISTRY__', () => {
+    const reg = window.__ATRIUM_REGISTRY__!;
+    reg.registerSettingsGroup?.({
+      key: 'global',
+      label: 'Global',
+      children: [{ key: 'one', label: 'One', to: '/global/one' }],
+    });
+    expect(getSettingsGroups().map((g) => g.key)).toContain('global');
   });
 
   it('registerProfileItem appends in registration order', () => {
